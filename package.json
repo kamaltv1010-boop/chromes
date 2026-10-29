@@ -1,0 +1,61 @@
+{
+  "name": "noor-chrome",
+  "productName": "Noor for Chrome",
+  "version": "1.0.0",
+  "description": "Profiles that open Google Chrome itself, each with its own fingerprints (canvas, WebGL, screen, hardware, time zone), data and proxy, like the Noor browser.",
+  "main": "main/main.js",
+  "license": "MIT",
+  "author": "kamaltv1010-boop",
+  "repository": "github:kamaltv1010-boop/noor-chrome",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\"",
+    "dist": "electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "ma.noor.chrome",
+    "productName": "Noor for Chrome",
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "scripts/**/*",
+      "rules/**/*",
+      "build/icon.*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Noor for Chrome",
+      "artifactName": "NoorChrome-Setup-${version}-windows-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "NoorChrome-${version}-windows-${arch}-portable.${ext}"
+    }
+  }
+}

@@ -1,0 +1,86 @@
+# Builds Noor for Chrome: a portable .exe and an installer. Every build
+# of main becomes a release (v1.0.<run number>) with both files attached,
+# so every version stays available and can be gone back to; a pushed tag
+# like v1.2.0 makes a release of that version. Nothing is code-signed, so
+# Windows SmartScreen asks once before the first run ("More info" > "Run
+# anyway").
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      # The runner has Google Chrome: open it through the launcher and
+      # check a page. Best effort, since the runner may have no display.
+      - name: Open Chrome through the launcher
+        run: node tools/smoke-chrome.js
+        continue-on-error: true
+        timeout-minutes: 3
+
+      # Every build has its own version, shown in the ⋯ menu, in Settings >
+      # About and in the file names: 1.0.<run number>, or the tag's version
+      # for a release (v1.2.0 -> 1.2.0).
+      - name: Version this build
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+          else
+            base="$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")"
+            version="$base.$GITHUB_RUN_NUMBER"
+          fi
+          npm version "$version" --no-git-tag-version --allow-same-version
+          echo "NOOR_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Building Noor for Chrome $version"
+          {
+            echo "Build $version of commit ${GITHUB_SHA::7}."
+            echo
+            echo '```'
+            git log -1 --pretty=%B
+            echo '```'
+            echo
+            echo "Windows 10/11, 64-bit. The portable .exe runs without installing; the Setup .exe installs. SmartScreen asks once: More info, then Run anyway."
+          } > release-notes.md
+
+      - name: Build the .exe
+        run: npm run dist
+
+      - name: Keep the .exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoorChrome-windows-${{ env.NOOR_VERSION }}
+          path: dist/*.exe
+          if-no-files-found: error
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.NOOR_VERSION }}
+          name: Noor for Chrome ${{ env.NOOR_VERSION }}
+          target_commitish: ${{ github.sha }}
+          body_path: release-notes.md
+          files: dist/*.exe
+          fail_on_unmatched_files: true

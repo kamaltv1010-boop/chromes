@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <title>Noor for Chrome</title>
+  <link rel="stylesheet" href="app.css">
+  <style>
+    .profile { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+    .profile:first-child { border-top: 0; }
+    .profile .name { flex: 1; min-width: 0; font-weight: 600; }
+    .profile .name small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .profile .running { color: var(--green); font-size: 13px; font-weight: 600; }
+    .menu { position: relative; }
+    .menu .items { display: none; position: absolute; right: 0; top: 36px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); min-width: 200px; z-index: 5; padding: 6px; }
+    .menu.open .items { display: block; }
+    .menu .items button { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; background: none; border-radius: 8px; cursor: pointer; }
+    .menu .items button:hover { background: var(--hover); }
+    .menu .items button.danger { color: var(--danger); }
+    .newrow { display: flex; gap: 8px; padding: 12px 0; }
+    .newrow input { flex: 1; }
+    .status { font-size: 13px; color: var(--muted); margin: 6px 12px; }
+    .status.warn { color: var(--shield); }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <img class="logo" src="../build/icon.png" alt="">
+    <h1>Noor for Chrome</h1>
+    <div class="hint">Each profile opens Google Chrome itself, with its own fingerprints, cookies, logins and proxy.</div>
+  </div>
+
+  <h3>Profiles</h3>
+  <div class="card" id="profiles"></div>
+  <div class="card">
+    <div class="newrow"><input type="text" id="newname" placeholder="New profile"><button class="button" id="add">Add</button></div>
+  </div>
+  <p class="status" id="chromestatus"></p>
+
+  <h3>Fingerprint Protection</h3>
+  <div class="card" id="protections"></div>
+  <p class="footer">Websites see noisy canvas and WebGL values that differ from this PC's but stay the same on a site, another common PC's screen size, processor and memory, and the time zone of your connection. Sign-in sites of Meta, Google, Apple and Microsoft see this PC's real screen and hardware. Audio and ClientRects noise are off at first: on a PC those values are the same for everyone, so noise there would stand out.</p>
+
+  <h3>Settings</h3>
+  <div class="card">
+    <div class="row"><div class="label">Block trackers<small>Meta, Google Analytics, TikTok and other trackers never load on other sites.</small></div><input type="checkbox" data-setting="blockTrackers"></div>
+    <div class="row"><div class="label">Time zone of your IP address<small id="timezonehint"></small></div><input type="checkbox" data-setting="timezoneFromIP"></div>
+    <div class="row"><div class="label">Google Chrome<small id="chromepath"></small></div><button class="button secondary small" id="choosechrome">Choose…</button></div>
+  </div>
+
+  <h3>About</h3>
+  <div class="card">
+    <div class="row"><div class="label">Noor for Chrome</div><div class="value" id="version"></div></div>
+    <div class="row"><div class="label">Source code</div><div class="value"><a href="https://github.com/kamaltv1010-boop/noor-chrome" id="source">github.com/kamaltv1010-boop/noor-chrome</a></div></div>
+  </div>
+</div>
+<script src="index.js"></script>
+</body>
+</html>

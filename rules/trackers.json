@@ -1,0 +1,279 @@
+[
+  {
+    "domain": "facebook.com",
+    "allowedOn": [
+      "facebook.com",
+      "fb.com",
+      "messenger.com",
+      "instagram.com",
+      "threads.net",
+      "threads.com",
+      "meta.com",
+      "whatsapp.com"
+    ]
+  },
+  {
+    "domain": "facebook.net",
+    "allowedOn": [
+      "facebook.com",
+      "fb.com",
+      "messenger.com",
+      "instagram.com",
+      "threads.net",
+      "threads.com",
+      "meta.com",
+      "whatsapp.com"
+    ]
+  },
+  {
+    "domain": "fb.com",
+    "allowedOn": [
+      "facebook.com",
+      "fb.com",
+      "messenger.com",
+      "instagram.com",
+      "threads.net",
+      "threads.com",
+      "meta.com",
+      "whatsapp.com"
+    ]
+  },
+  {
+    "domain": "fbcdn.net",
+    "allowedOn": [
+      "facebook.com",
+      "fb.com",
+      "messenger.com",
+      "instagram.com",
+      "threads.net",
+      "threads.com",
+      "meta.com",
+      "whatsapp.com"
+    ]
+  },
+  {
+    "domain": "fbsbx.com",
+    "allowedOn": [
+      "facebook.com",
+      "fb.com",
+      "messenger.com",
+      "instagram.com",
+      "threads.net",
+      "threads.com",
+      "meta.com",
+      "whatsapp.com"
+    ]
+  },
+  {
+    "domain": "instagram.com",
+    "allowedOn": [
+      "facebook.com",
+      "fb.com",
+      "messenger.com",
+      "instagram.com",
+      "threads.net",
+      "threads.com",
+      "meta.com",
+      "whatsapp.com"
+    ]
+  },
+  {
+    "domain": "cdninstagram.com",
+    "allowedOn": [
+      "facebook.com",
+      "fb.com",
+      "messenger.com",
+      "instagram.com",
+      "threads.net",
+      "threads.com",
+      "meta.com",
+      "whatsapp.com"
+    ]
+  },
+  {
+    "domain": "threads.net",
+    "allowedOn": [
+      "facebook.com",
+      "fb.com",
+      "messenger.com",
+      "instagram.com",
+      "threads.net",
+      "threads.com",
+      "meta.com",
+      "whatsapp.com"
+    ]
+  },
+  {
+    "domain": "threads.com",
+    "allowedOn": [
+      "facebook.com",
+      "fb.com",
+      "messenger.com",
+      "instagram.com",
+      "threads.net",
+      "threads.com",
+      "meta.com",
+      "whatsapp.com"
+    ]
+  },
+  {
+    "domain": "google-analytics.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "googletagmanager.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "analytics.google.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "doubleclick.net",
+    "allowedOn": []
+  },
+  {
+    "domain": "googlesyndication.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "googleadservices.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "adservice.google.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "analytics.tiktok.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "business-api.tiktok.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "ads-twitter.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "analytics.twitter.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "tr.snapchat.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "sc-static.net",
+    "allowedOn": []
+  },
+  {
+    "domain": "snap.licdn.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "px.ads.linkedin.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "ct.pinterest.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "alb.reddit.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "pixel.reddit.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "bat.bing.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "clarity.ms",
+    "allowedOn": []
+  },
+  {
+    "domain": "mc.yandex.ru",
+    "allowedOn": []
+  },
+  {
+    "domain": "amazon-adsystem.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "hotjar.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "mixpanel.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "segment.io",
+    "allowedOn": []
+  },
+  {
+    "domain": "cdn.segment.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "amplitude.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "fullstory.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "scorecardresearch.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "quantserve.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "criteo.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "criteo.net",
+    "allowedOn": []
+  },
+  {
+    "domain": "taboola.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "outbrain.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "adnxs.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "adsrvr.org",
+    "allowedOn": []
+  },
+  {
+    "domain": "rubiconproject.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "pubmatic.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "casalemedia.com",
+    "allowedOn": []
+  },
+  {
+    "domain": "moatads.com",
+    "allowedOn": []
+  }
+]
