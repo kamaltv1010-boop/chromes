@@ -35,6 +35,28 @@ const push = () => {
   }
 };
 
+/// The protection's scripts for a profile's pages and workers, as set now.
+const scriptsFor = (profile) => {
+  const config = fingerprint.config(profile);
+  return {
+    pageScript: pageScript(config),
+    workerScript: (url, hidden) => workerScript(config, url, hidden),
+  };
+};
+
+/// Chrome open for `profile` (or for every profile) gets its protection
+/// as set now: new fingerprints, or a protection turned on or off, reach
+/// its pages as they load again.
+const refresh = (profile = null) => {
+  for (const [id, instance] of instances) {
+    const owner = profile ? (id === profile.id ? profile : null) : profiles.find(id);
+    if (owner) {
+      const { pageScript: page, workerScript: worker } = scriptsFor(owner);
+      instance.setScripts(page, worker).catch(() => {});
+    }
+  }
+};
+
 /// Opens Chrome for a profile, with the protection, the time zone and
 /// the trackers blocked as set now.
 const open = async (profile) => {
@@ -45,13 +67,11 @@ const open = async (profile) => {
   if (!executable) {
     throw new Error("Google Chrome wasn't found. Choose chrome.exe in Settings.");
   }
-  const config = fingerprint.config(profile);
   const instance = new ChromeInstance({
     executable,
     profile,
     dir: profiles.dir(profile),
-    pageScript: pageScript(config),
-    workerScript: (url) => workerScript(config, url),
+    ...scriptsFor(profile),
     timezone: timezone.current,
     blockTrackers: store.get("blockTrackers", true) !== false,
     extraArgs: (process.env.NOOR_CHROME_ARGS || "").split(" ").filter(Boolean),
@@ -109,6 +129,7 @@ const registerIPC = () => {
     const profile = profiles.find(id);
     if (profile) {
       fingerprint.newSeeds(Array.isArray(kinds) ? kinds.filter((k) => KINDS.includes(k)) : KINDS, profile);
+      refresh(profile);
     }
   });
   handle("chrome:open", async (id) => {
@@ -141,6 +162,7 @@ const registerIPC = () => {
   handle("settings:set", (key, value) => {
     if (key.startsWith("protection.") && KINDS.includes(key.slice("protection.".length))) {
       fingerprint.setEnabled(key.slice("protection.".length), Boolean(value));
+      refresh();
     } else if (key === "timezoneFromIP") {
       timezone.setEnabled(Boolean(value));
     } else if (key === "blockTrackers") {

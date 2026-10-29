@@ -5,11 +5,13 @@
 ## كيفاش كيخدم
 
 - **بروفايلات**: كل بروفايل عندو folder ديالو (`--user-data-dir`) فChrome كيحتافظ فيه بكلشي ديالو، منفصل على البروفايلات الأخرى وعلى Chrome ديالك العادي.
-- **الحماية**: فاش كتضغط *Open Chrome*، البرنامج كيفتح Chrome وكيتواصل معاه بالـ debugging pipe ديالو (ماشي port، ما كاين والو على الشبكة). كل صفحة، كل iframe، وكل worker (dedicated، service، shared) كيتوقف قبل أول سطر ديالو، كياخد الحماية (نفس `scripts/protect.js` ديال Noor، المولّد من تطبيق iPhone)، والمنطقة الزمنية، والمتتبعين المحجوبين، وعاد كيتخلى يكمل.
+- **الحماية**: فاش كتضغط *Open Chrome*، البرنامج كيفتح Chrome بـ debugging port ديالو (port عشوائي كيختارو البرنامج، على هاد الـ PC بوحدو، والمواقع ما تقدرش توصل ليه). كل صفحة، كل iframe، وكل worker (dedicated، service، shared) كياخد الحماية قبل أول سطر ديالو (نفس `scripts/protect.js` ديال Noor، المولّد من تطبيق iPhone)، والمنطقة الزمنية، والمتتبعين المحجوبين. الروابط اللي كتحل فـ onglet جديد، `window.open`، والـ onglets اللي Chrome كيرجعهم ملي كيتحل، حتى هوما.
+- **ما كتبانش**: الحماية كتتصاوب داخل frame خاوي ومخبّي، باش الـ functions ديالها ما يبانوش فالـ stack ديال الأخطاء (بحال الـ functions الأصلية ديال Chrome)؛ فالـ workers كتدخل ككود داخلي ديال DevTools اللي حتى هو ما كيبانش. الموقع اللي الـ CSP ديالو كيمنع `eval` كياخد الحماية فالصفحة نفسها، بحال قبل.
 - **المنطقة الزمنية**: كتتجاب أوتوماتيكياً من الـ IP ديال الاتصال (VPN أو proxy) وكتتطبق على الصفحات، باش الموقع يلقاها كتوافق مع الـ IP.
 - **المتتبعين**: Meta، Google Analytics، TikTok وغيرهم ما كيتحمّلوش على المواقع الأخرى (نفس القواعد ديال Noor، `rules/trackers.json`).
 - **Proxy لكل بروفايل**: `socks5://host:port` أو `http://host:port`.
-- **navigator.webdriver**: Chrome كيحط `true` فاش يكون debugging pipe محلول؛ البرنامج كيطفي هاد العلامة (`--disable-blink-features=AutomationControlled`) باش الصفحة ما تقراهاش.
+- **navigator.webdriver**: Chrome كيحط `true` غير ملي يتحل بـ debugging pipe ولا بـ port كيختارو هو (بحال الأدوات ديال automation). البرنامج كيعطيه port محدد، فـ Chrome كيعتبرو developer عادي: `navigator.webdriver` كيبقى `false` بلا حتى flag، وبلا الشريط ديال «unsupported command-line flag».
+- **New fingerprints**: كتطبّق على Chrome المفتوح ديال داك البروفايل بلا ما تسدو: الصفحات كياخدوها ملي تعاود تحلهم (F5).
 
 Chrome المفتوح من Noor كيتسد فاش يتسد Noor، حيت بلا Noor الصفحات الجديدة غادي تبقى بلا حماية.
 

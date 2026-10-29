@@ -7,7 +7,7 @@ const http = require("http");
 const os = require("os");
 const path = require("path");
 const { ChromeInstance, findChrome } = require("../main/chrome");
-const { pageScript, workerScript } = require("../main/inject");
+const { pageScript, workerScript, NAME } = require("../main/inject");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</title></head><body>
@@ -39,7 +39,7 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
     profile: { id: "smoke", name: "Smoke", proxy: "" },
     dir: fs.mkdtempSync(path.join(os.tmpdir(), "noor-chrome-smoke-")),
     pageScript: pageScript(config),
-    workerScript: (url) => workerScript(config, url),
+    workerScript: (url, hidden) => workerScript(config, url, hidden),
     timezone: "Asia/Tokyo",
     blockTrackers: true,
     extraArgs: (process.env.NOOR_CHROME_ARGS || "").split(" ").filter(Boolean),
@@ -63,6 +63,8 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
       webdriver: navigator.webdriver, toStr: Function.prototype.toString.call(Object.getOwnPropertyDescriptor(Screen.prototype, "width").get),
       frameScreen: f.contentWindow.screen.width, frameCores: f.contentWindow.navigator.hardwareConcurrency,
       canvasURL: c.toDataURL().slice(-24), worker, gaBlocked: window.gaBlocked === true,
+      // A stack read inside a protected built-in: the page's frames only.
+      stack: (() => { let s = ""; ctx.getImageData({ valueOf() { s = new Error().stack; return 0; } }, 0, 1, 1); return s; })(),
     };
   })()`;
   const page = await instance.evaluate(probe);
@@ -70,7 +72,8 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
   await instance.open(base);
   await sleep(2000);
   console.log(JSON.stringify({ executable, page, requests }, null, 1));
-  const ok = page.screen === "2560x1440" && page.cores === 6 && page.memory === 8 && page.zone === "Asia/Tokyo" && page.worker && page.worker.cores === 6 && page.worker.zone === "Asia/Tokyo" && page.frameScreen === 2560 && page.webdriver === false && page.gaBlocked && /native code/.test(page.toStr);
+  const ok = page.screen === "2560x1440" && page.cores === 6 && page.memory === 8 && page.zone === "Asia/Tokyo" && page.worker && page.worker.cores === 6 && page.worker.zone === "Asia/Tokyo" && page.frameScreen === 2560 && page.webdriver === false && page.gaBlocked && /native code/.test(page.toStr)
+    && page.stack.includes("valueOf") && !page.stack.includes(NAME);
   await instance.close();
   server.close();
   console.log(ok ? "SMOKE OK" : "SMOKE FAILED");

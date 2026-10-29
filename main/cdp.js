@@ -1,31 +1,19 @@
 "use strict";
 const { EventEmitter } = require("events");
 
-/// A client of Chrome's debugging protocol over the pipe Chrome opens with
-/// --remote-debugging-pipe: messages are JSON, each ended by a NUL byte,
-/// written to Chrome's file descriptor 3 and read from its 4. Nothing of
-/// it is on the network. `send` gives a promise of the result; events come
-/// as "event" with { method, params, sessionId }.
-class Pipe extends EventEmitter {
-  constructor(child) {
+/// A client of Chrome's debugging protocol, over the WebSocket of the
+/// debugging port Chrome was given (only this computer can reach it).
+/// Messages are JSON; `send` gives a promise of the result, and events
+/// come as "event" with { method, params, sessionId }. `socket` is a
+/// WebSocket, open (see Connection.open).
+class Connection extends EventEmitter {
+  constructor(socket) {
     super();
-    this.child = child;
-    this.writer = child.stdio[3];
-    this.reader = child.stdio[4];
+    this.socket = socket;
     this.nextId = 1;
     this.pending = new Map();
     this.closed = false;
-    let buffered = "";
-    this.reader.setEncoding("utf8");
-    this.reader.on("data", (chunk) => {
-      buffered += chunk;
-      let end;
-      while ((end = buffered.indexOf("\0")) !== -1) {
-        const text = buffered.slice(0, end);
-        buffered = buffered.slice(end + 1);
-        this.receive(text);
-      }
-    });
+    socket.addEventListener("message", (event) => this.receive(String(event.data)));
     const close = () => {
       if (this.closed) {
         return;
@@ -37,10 +25,27 @@ class Pipe extends EventEmitter {
       this.pending.clear();
       this.emit("close");
     };
-    this.reader.on("end", close);
-    this.reader.on("close", close);
-    this.reader.on("error", close);
-    child.on("exit", close);
+    socket.addEventListener("close", close);
+    socket.addEventListener("error", close);
+  }
+
+  /// Connects to `url` (Chrome's browser address, ws://127.0.0.1:…).
+  static open(url, Socket = globalThis.WebSocket) {
+    return new Promise((resolve, reject) => {
+      let socket;
+      try {
+        socket = new Socket(url);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      const failed = () => reject(new Error("Couldn't connect to Chrome"));
+      socket.addEventListener("error", failed);
+      socket.addEventListener("open", () => {
+        socket.removeEventListener("error", failed);
+        resolve(new Connection(socket));
+      });
+    });
   }
 
   receive(text) {
@@ -77,13 +82,21 @@ class Pipe extends EventEmitter {
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       try {
-        this.writer.write(JSON.stringify(message) + "\0");
+        this.socket.send(JSON.stringify(message));
       } catch (error) {
         this.pending.delete(id);
         reject(error);
       }
     });
   }
+
+  close() {
+    try {
+      this.socket.close();
+    } catch (error) {
+      // Gone already.
+    }
+  }
 }
 
-module.exports = { Pipe };
+module.exports = { Connection };
