@@ -6,7 +6,7 @@
   "main": "main/main.js",
   "license": "MIT",
   "author": "kamaltv1010-boop",
-  "repository": "github:kamaltv1010-boop/noor-chrome",
+  "repository": "github:kamaltv1010-boop/chromes",
   "scripts": {
     "start": "electron .",
     "test": "node --test \"test/*.test.js\"",

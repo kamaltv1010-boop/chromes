@@ -15,7 +15,7 @@ Chrome المفتوح من Noor كيتسد فاش يتسد Noor، حيت بلا 
 
 ## التثبيت
 
-من [Releases](https://github.com/kamaltv1010-boop/noor-chrome/releases): `NoorChrome-Setup-<version>-windows-x64.exe` (installer) أو `NoorChrome-<version>-windows-x64-portable.exe`. خاص Google Chrome يكون منصّب؛ إلا ماكانش فالبلاصة العادية، اختارو من الإعدادات.
+من [Releases](https://github.com/kamaltv1010-boop/chromes/releases): `NoorChrome-Setup-<version>-windows-x64.exe` (installer) أو `NoorChrome-<version>-windows-x64-portable.exe`. خاص Google Chrome يكون منصّب؛ إلا ماكانش فالبلاصة العادية، اختارو من الإعدادات.
 
 ## التطوير
 
