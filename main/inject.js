@@ -14,16 +14,22 @@ const SIGN_IN_SITES = [
   "meta.com", "fb.com", "accounts.google.com", "appleid.apple.com", "idmsa.apple.com",
   "login.live.com", "login.microsoftonline.com",
 ];
-/// The name the scripts go by, where a stack could show it, and the mark of
-/// the frame the protection is made in (see pageScript): new for each run
-/// of the app, so a page can neither recognize nor imitate them.
+/// The name the scripts go by, where a stack could show it, the mark of the
+/// frame the protection is made in and of the copies of it in a page (see
+/// pageScript, and `shared` in protect.js), and the mark a replacement's
+/// source carries, which only this run's copies know (the iPhone app's
+/// "noor lookalike"): new for each run of the app, so a page can neither
+/// recognize nor imitate them.
 const NAME = crypto.randomBytes(6).toString("hex") + ".js";
 const KEY = "_" + crypto.randomBytes(12).toString("hex");
+const MARK = crypto.randomBytes(8).toString("hex");
 
 let protectSource = null;
 const source = () => {
   if (protectSource === null) {
-    protectSource = fs.readFileSync(path.join(__dirname, "..", "scripts", "protect.js"), "utf8").replace("module.exports = protectPage;", "");
+    protectSource = fs.readFileSync(path.join(__dirname, "..", "scripts", "protect.js"), "utf8")
+      .replace("module.exports = protectPage;", "")
+      .split("noor lookalike").join(MARK);
   }
   return protectSource;
 };
@@ -41,22 +47,26 @@ const source = () => {
 /// in later, from the browser, so until it is taken out it is the empty
 /// document it starts as; nothing is asked of the network, and nothing
 /// goes to another process. Chrome runs this script in that frame too, as
-/// its window is made: there it does nothing (the frame's mark). The
-/// protection is compiled there with the frame's eval, which a page's
-/// policy (CSP) may forbid: the frame is first asked to compile "0", so a
-/// page that forbids it hears of nothing of the protection. Then, or
-/// failing anything else, the protection runs in the page's realm, as
-/// before.
+/// its window is made: there, told by the frame's mark, it hands the page
+/// the protection it made in that realm. Nothing is compiled from text
+/// (eval), which a page's policy (CSP) could forbid and report to its
+/// site. Failing that, the protection runs in the page's realm.
 const pageScript = (config) => `(() => {
 "use strict";
 // Only sites are protected, not Chrome's own pages or extensions'.
 if (!/^(https?|file|data|blob|about):$/.test(location.protocol)) return;
 const KEY = ${JSON.stringify(KEY)};
+const made = () => {
+${source()}
+return protectPage;
+};
 try {
   const element = window.frameElement;
-  if (element && Object.prototype.hasOwnProperty.call(element, KEY)) return;
+  if (element && Object.prototype.hasOwnProperty.call(element, KEY)) {
+    element[KEY] = made();
+    return;
+  }
 } catch (e) {}
-const SOURCE = ${JSON.stringify(`(() => {\n"use strict";\n${source()}\nreturn protectPage;\n})()\n//# sourceURL=${NAME}`)};
 const SIGN_IN = ${JSON.stringify(SIGN_IN_SITES)};
 const config = ${JSON.stringify(config)};
 const host = (() => {
@@ -64,7 +74,7 @@ const host = (() => {
   try { return window.location.hostname; } catch (e) { return ""; }
 })();
 const realDevice = SIGN_IN.some((site) => host === site || host.endsWith("." + site));
-const given = { seeds: config.seeds, screen: realDevice ? null : config.screen, hardware: realDevice ? null : config.hardware };
+const given = { seeds: config.seeds, screen: realDevice ? null : config.screen, hardware: realDevice ? null : config.hardware, key: KEY };
 
 const hiddenProtect = () => {
   let frame = null;
@@ -78,10 +88,8 @@ const hiddenProtect = () => {
     parent.appendChild(frame);
     const realm = frame.contentWindow;
     if (!realm || realm.location.href !== "about:blank") return null;
-    const evaluate = realm.eval;
-    evaluate("0");
-    const made = evaluate(SOURCE);
-    return typeof made === "function" ? made : null;
+    const handed = frame[KEY];
+    return typeof handed === "function" ? handed : null;
   } catch (e) {
     return null;
   } finally {
@@ -110,9 +118,8 @@ if (hidden) {
     return;
   } catch (e) {}
 }
-// Here, Chrome lets this script compile code whatever the page's policy.
 try {
-  (0, eval)(SOURCE)(window, given);
+  made()(window, given);
 } catch (e) {}
 })();
 //# sourceURL=${NAME}`;
@@ -149,4 +156,15 @@ try { protectPage(self, ${JSON.stringify(given)}); } catch (e) {}
 //# sourceURL=${NAME}`;
 };
 
-module.exports = { pageScript, workerScript, hostOfWorker, SIGN_IN_SITES, NAME, KEY };
+/// Whether a page at `url` is on a sign-in site, which sees the real screen
+/// and hardware.
+const isSignInSite = (url) => {
+  try {
+    const host = new URL(url).hostname;
+    return SIGN_IN_SITES.some((site) => host === site || host.endsWith("." + site));
+  } catch (error) {
+    return false;
+  }
+};
+
+module.exports = { pageScript, workerScript, hostOfWorker, isSignInSite, SIGN_IN_SITES, NAME, KEY, MARK };

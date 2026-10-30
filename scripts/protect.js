@@ -34,8 +34,8 @@ const protectPage = (window, config) => {
       try { return kindOf.call(array); } catch (e) { return undefined; }
     };
 
-    // Each replacement's real built-in, for its toString() and for calling it.
-    const originals = new WeakMap();
+    // Each replacement's real built-in, for its toString() and for calling it
+    // (`originals`, below).
     const native = (fn) => originals.get(fn) || fn;
 
     // A page sees how often, and in which order, a built-in reads what it
@@ -124,21 +124,66 @@ const protectPage = (window, config) => {
       if (!markShows) return false;
       try { return win.Function.prototype.toString.call(probe).indexOf(MARK) === -1; } catch (e) { return false; }
     };
-    // The windows protected from this script, each once.
-    const protectedWindows = new WeakSet();
-    // The audio buffers the browser rendered or decoded, from any window, and
-    // the channels of them already changed.
-    const rendered = new WeakSet();
-    const nudged = new WeakMap();
-    // Each canvas's context: its kind, "webgl" or "canvas", and the settings
-    // it was made with, from any window.
-    const kinds = new WeakMap();
-    // The canvases holding what a device's rendering decided (text, paths,
-    // images…), the only ones that get noise, and those a clip limits.
-    const painted = new WeakSet();
-    const clipped = new WeakSet();
-    // Each canvas's (or WebGL context's) candidate pixels, computed lately.
-    const marks = new WeakMap();
+    // What the copies of this script in a page share: the frames of a page
+    // and the windows it opens each run a copy, and one that reaches the copy
+    // of its parent or opener takes that one's state, so every copy knows
+    // every replacement and every canvas, buffer and context, whichever
+    // window's built-ins a page reads them with. The copies ask each other
+    // through the other window's Function.prototype.toString, reached through
+    // prototypes and property descriptors only (no getter or proxy of a page
+    // runs), called with a symbol only they can make, and only once its
+    // source shows the mark of this run: a page's own function is never
+    // called. Elsewhere (a worker, the top of a tab) a copy starts the state.
+    const reflectApply = Reflect.apply;
+    const sharedToken = config.key ? Symbol.for(config.key) : null;
+    const toStringOf = (object) => {
+      try {
+        let last = object;
+        for (let next = getPrototypeOf(last), i = 0; next !== null && i < 64; next = getPrototypeOf(next), i++) last = next;
+        const objectToString = getOwnPropertyDescriptor(last, "toString");
+        const functionProto = objectToString && typeof objectToString.value === "function" ? getPrototypeOf(objectToString.value) : null;
+        const own = functionProto && getOwnPropertyDescriptor(functionProto, "toString");
+        return own && typeof own.value === "function" ? own.value : null;
+      } catch (e) {
+        return null;
+      }
+    };
+    const shared = (() => {
+      if (sharedToken !== null) {
+        const near = [];
+        try { near.push(window.frameElement); } catch (e) {}
+        try { near.push(window.opener); } catch (e) {}
+        for (const other of near) {
+          try {
+            const asked = other ? toStringOf(other) : null;
+            if (asked && reflectApply(nativeToString, asked, []).indexOf(MARK) !== -1) {
+              const state = reflectApply(asked, sharedToken, []);
+              if (state && typeof state === "object" && state.originals) return state;
+            }
+          } catch (e) {}
+        }
+      }
+      return {
+        originals: new WeakMap(),
+        // The windows protected, each once.
+        protectedWindows: new WeakSet(),
+        // The audio buffers the browser rendered or decoded, from any
+        // window, and the channels of them already changed.
+        rendered: new WeakSet(),
+        nudged: new WeakMap(),
+        // Each canvas's context: its kind, "webgl" or "canvas", and the
+        // settings it was made with, from any window.
+        kinds: new WeakMap(),
+        // The canvases holding what a device's rendering decided (text,
+        // paths, images…), the only ones that get noise, and those a clip
+        // limits.
+        painted: new WeakSet(),
+        clipped: new WeakSet(),
+        // Each canvas's (or WebGL context's) candidate pixels, computed lately.
+        marks: new WeakMap(),
+      };
+    })();
+    const { originals, protectedWindows, rendered, nudged, kinds, painted, clipped, marks } = shared;
 
     // Integer hash, so a given pixel or sample always gets the same tweak.
     const mix = (n) => {
@@ -410,6 +455,7 @@ const protect = (window) => {
     };
 
     window.Function.prototype.toString = lookalike(windowToString, function () {
+      if (sharedToken !== null && this === sharedToken) return shared;
       const source = windowToString.apply(native(this), arguments);
       if (typeof source === "string" && source.indexOf(MARK) !== -1) {
         return nativeShape.replace("toString", this.name);
@@ -1084,9 +1130,16 @@ if (config.screen) { try {
         {
           const width = config.screen.width;
           const height = config.screen.height;
-          for (const name of ["width", "availWidth"]) defineGetter(window.Screen.prototype, name, () => width);
-          defineGetter(window.Screen.prototype, "height", () => height);
+          const shown = (name) => {
+            try { return getOwnPropertyDescriptor(window.Screen.prototype, name).get.call(window.screen); } catch (e) { return undefined; }
+          };
+          const byChrome = shown("width") === width && shown("height") === height;
+          if (!byChrome) {
+            for (const name of ["width", "availWidth"]) defineGetter(window.Screen.prototype, name, () => width);
+            defineGetter(window.Screen.prototype, "height", () => height);
+          }
           defineGetter(window.Screen.prototype, "availHeight", () => height - 48);
+          if (!byChrome) {
 
           // Media queries about the screen (device-width, device-height,
           // device-aspect-ratio, and the pixel density when it is changed)
@@ -1152,6 +1205,7 @@ if (config.screen) { try {
             defineGetter(window.MediaQueryList.prototype, "media", function (value) {
               return written.get(this) || value;
             });
+          }
           }
         }
 

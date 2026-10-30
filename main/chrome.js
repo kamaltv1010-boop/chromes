@@ -7,6 +7,7 @@ const net = require("net");
 const path = require("path");
 const { Connection } = require("./cdp");
 const { blockedFor } = require("./trackers");
+const { isSignInSite } = require("./inject");
 
 /// How long Chrome has to open its debugging port.
 const START_WAIT = 30 * 1000;
@@ -80,18 +81,51 @@ const isFile = (file) => {
 /// Chrome's program: the one chosen, else the first found.
 const findChrome = (chosen) => [chosen].concat(chromePaths()).find(isFile) || null;
 
+/// What WebRTC may do in a profile (Chrome's webrtc.ip_handling_policy):
+/// with a proxy, only what goes through it. Chrome sends WebRTC's own
+/// traffic (UDP) around a proxy, so a site would see this computer's
+/// address next to the proxy's.
+const webRTCPolicy = (proxy) => (proxy ? "disable_non_proxied_udp" : "default");
+
+/// Writes `policy` into the profile's settings in `dir`, which Chrome reads
+/// as it starts. Settings that can't be read are left as they are.
+const setWebRTCPolicy = (dir, policy) => {
+  const file = path.join(dir, "Default", "Preferences");
+  let prefs = {};
+  if (fs.existsSync(file)) {
+    try {
+      prefs = JSON.parse(fs.readFileSync(file, "utf8"));
+    } catch (error) {
+      return false;
+    }
+    if (!prefs || typeof prefs !== "object" || Array.isArray(prefs)) {
+      return false;
+    }
+  }
+  const current = (prefs.webrtc && prefs.webrtc.ip_handling_policy) || "default";
+  if (current === policy) {
+    return true;
+  }
+  prefs.webrtc = Object.assign({}, prefs.webrtc, { ip_handling_policy: policy });
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(prefs));
+  return true;
+};
+
 /// Chrome open for a profile: its process, the debugging connection to it,
 /// and every page and worker it makes, held as it starts, given the
-/// protection and the profile's time zone and blocked trackers, then let
-/// go. Nothing of it marks the browser as automated.
+/// protection and the profile's screen, time zone and blocked trackers,
+/// then let go. Nothing of it marks the browser as automated.
 class ChromeInstance extends EventEmitter {
-  constructor({ executable, profile, dir, pageScript, workerScript, timezone = null, blockTrackers = true, extraArgs = [] }) {
+  constructor({ executable, profile, dir, pageScript, workerScript, screen = null, timezone = null, blockTrackers = true, extraArgs = [] }) {
     super();
     this.executable = executable;
     this.profile = profile;
     this.dir = dir;
     this.pageScript = pageScript;
     this.workerScript = workerScript;
+    /// The screen pages see ({ width, height }), or null for the real one.
+    this.screen = screen;
     this.timezone = timezone;
     this.blockTrackers = blockTrackers;
     this.extraArgs = extraArgs;
@@ -129,6 +163,7 @@ class ChromeInstance extends EventEmitter {
 
   async start() {
     fs.mkdirSync(this.dir, { recursive: true });
+    setWebRTCPolicy(this.dir, webRTCPolicy(this.profile.proxy));
     this.port = await freePort();
     this.child = spawn(this.executable, this.args(), { stdio: "ignore", windowsHide: false });
     this.child.on("exit", () => this.ended());
@@ -215,6 +250,7 @@ class ChromeInstance extends EventEmitter {
     }
     this.pages.set(sessionId, Object.assign({}, info, { url }));
     this.block(sessionId, url);
+    this.showScreen(sessionId);
   }
 
   /// A page or worker Chrome made, `held` before its first line (or, one
@@ -264,12 +300,13 @@ class ChromeInstance extends EventEmitter {
       // runs none of the scripts given it.
       this.send("Page.enable", {}, sessionId),
     ];
+    sent.push(this.showScreen(sessionId));
     if (this.timezone) {
       sent.push(this.send("Emulation.setTimezoneOverride", { timezoneId: this.timezone }, sessionId));
     }
-    if (this.blockTrackers) {
-      sent.push(this.send("Network.enable", {}, sessionId), this.block(sessionId, info.url));
-    }
+    // A page's next document is seen as it is asked for (see navigated),
+    // for the trackers blocked there and the screen it is shown.
+    sent.push(this.send("Network.enable", {}, sessionId), this.block(sessionId, info.url));
     // The page's own workers (and frames in other processes), held as they
     // start. Service and shared workers are the browser's, reached from it
     // (see start): held by two, a worker would wait for both.
@@ -280,6 +317,31 @@ class ChromeInstance extends EventEmitter {
       filter: [{ type: "service_worker", exclude: true }, { type: "shared_worker", exclude: true }, {}],
     }, sessionId));
     return Promise.all(sent);
+  }
+
+  /// Chrome itself shows a tab's page the profile's screen, so CSS (a media
+  /// query's device-width) agrees with what scripts read, and the page's
+  /// frames of its own site with it; frames of other sites get it from the
+  /// protection. A sign-in site sees the real screen (see inject.js).
+  showScreen(sessionId) {
+    const info = this.pages.get(sessionId);
+    if (!info || info.type !== "page") {
+      return Promise.resolve();
+    }
+    const screen = this.screen && !isSignInSite(info.url || "") ? this.screen : null;
+    const shown = screen ? `${screen.width}x${screen.height}` : "";
+    if (info.shown === shown) {
+      return Promise.resolve();
+    }
+    this.pages.set(sessionId, Object.assign({}, info, { shown }));
+    if (!screen) {
+      return info.shown ? this.send("Emulation.clearDeviceMetricsOverride", {}, sessionId) : Promise.resolve();
+    }
+    // A size of 0 and no scale leave the window and the page's layout as
+    // they are: only the screen changes.
+    return this.send("Emulation.setDeviceMetricsOverride", {
+      width: 0, height: 0, deviceScaleFactor: 0, mobile: false, screenWidth: screen.width, screenHeight: screen.height,
+    }, sessionId);
   }
 
   /// Runs the protection in a held worker before its first line. Given as
@@ -299,6 +361,10 @@ class ChromeInstance extends EventEmitter {
       return;
     }
     const send = (method, params) => this.connection.send(method, params, sessionId);
+    if (info.type === "worker" || info.type === "shared_worker") {
+      // The worker's own workers, held as they start too.
+      this.send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }, sessionId);
+    }
     try {
       const global = await send("Runtime.evaluate", { expression: "globalThis", silent: true });
       const objectId = global && global.result && global.result.objectId;
@@ -348,6 +414,14 @@ class ChromeInstance extends EventEmitter {
       if (added && added.identifier) {
         this.scripts.set(sessionId, added.identifier);
       }
+    }
+  }
+
+  /// A new screen (or null, the real one) for every tab's page from now on.
+  async setScreen(screen) {
+    this.screen = screen || null;
+    for (const sessionId of this.pages.keys()) {
+      await this.showScreen(sessionId);
     }
   }
 
@@ -401,4 +475,4 @@ class ChromeInstance extends EventEmitter {
   }
 }
 
-module.exports = { ChromeInstance, findChrome, chromePaths, browserAddress, freePort };
+module.exports = { ChromeInstance, findChrome, chromePaths, browserAddress, freePort, setWebRTCPolicy, webRTCPolicy };

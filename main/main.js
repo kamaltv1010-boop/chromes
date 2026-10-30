@@ -13,13 +13,15 @@ let profiles = null;
 let fingerprint = null;
 let timezone = null;
 let win = null;
-/// Chrome open per profile id.
+/// Chrome open per profile id, and opening (while a proxy's time zone is
+/// asked), so a profile opens once.
 const instances = new Map();
+const opening = new Map();
 
 const chromePath = () => findChrome(store.get("chromePath", null));
 
 const state = () => ({
-  profiles: profiles.all().map((p) => ({ ...p, running: instances.has(p.id), screen: fingerprint.screen(p), hardware: fingerprint.hardware(p) })),
+  profiles: profiles.all().map((p) => ({ ...p, running: instances.has(p.id), screen: fingerprint.screen(p), hardware: fingerprint.hardware(p), zone: p.proxy ? timezone.for(p.proxy) : null })),
   protections: Object.fromEntries(KINDS.map((kind) => [kind, fingerprint.isEnabled(kind)])),
   blockTrackers: store.get("blockTrackers", true) !== false,
   timezoneFromIP: timezone.enabled(),
@@ -35,12 +37,14 @@ const push = () => {
   }
 };
 
-/// The protection's scripts for a profile's pages and workers, as set now.
+/// The protection's scripts for a profile's pages and workers, and the
+/// screen Chrome shows its pages, as set now.
 const scriptsFor = (profile) => {
   const config = fingerprint.config(profile);
   return {
     pageScript: pageScript(config),
     workerScript: (url, hidden) => workerScript(config, url, hidden),
+    screen: config.screen,
   };
 };
 
@@ -51,18 +55,25 @@ const refresh = (profile = null) => {
   for (const [id, instance] of instances) {
     const owner = profile ? (id === profile.id ? profile : null) : profiles.find(id);
     if (owner) {
-      const { pageScript: page, workerScript: worker } = scriptsFor(owner);
-      instance.setScripts(page, worker).catch(() => {});
+      const { pageScript: page, workerScript: worker, screen: shown } = scriptsFor(owner);
+      instance.setScripts(page, worker).then(() => instance.setScreen(shown)).catch(() => {});
     }
   }
 };
 
 /// Opens Chrome for a profile, with the protection, the time zone and
 /// the trackers blocked as set now.
-const open = async (profile) => {
+const open = (profile) => {
   if (instances.has(profile.id)) {
-    return instances.get(profile.id);
+    return Promise.resolve(instances.get(profile.id));
   }
+  if (!opening.has(profile.id)) {
+    opening.set(profile.id, start(profile).finally(() => opening.delete(profile.id)));
+  }
+  return opening.get(profile.id);
+};
+
+const start = async (profile) => {
   const executable = chromePath();
   if (!executable) {
     throw new Error("Google Chrome wasn't found. Choose chrome.exe in Settings.");
@@ -72,7 +83,8 @@ const open = async (profile) => {
     profile,
     dir: profiles.dir(profile),
     ...scriptsFor(profile),
-    timezone: timezone.current,
+    // A profile with a proxy shows its proxy's zone, found through it.
+    timezone: await timezone.forOpening(profile.proxy),
     blockTrackers: store.get("blockTrackers", true) !== false,
     extraArgs: (process.env.NOOR_CHROME_ARGS || "").split(" ").filter(Boolean),
   });
@@ -182,13 +194,24 @@ app.whenReady().then(async () => {
   const display = screen.getPrimaryDisplay();
   fingerprint.realScreen = { width: display.size.width, height: display.size.height };
   timezone = new Timezone(store, { forced: process.env.NOOR_TEST_TIMEZONE || null });
-  timezone.onChange((zone) => {
-    for (const instance of instances.values()) {
-      instance.setTimezone(zone).catch(() => {});
+  timezone.onChange(() => {
+    for (const [id, instance] of instances) {
+      const profile = profiles.find(id);
+      instance.setTimezone(timezone.for(profile ? profile.proxy : "")).catch(() => {});
     }
     push();
   });
   timezone.start();
+  // A proxy's address can change too: asked again every so often while
+  // a profile using it is open.
+  setInterval(() => {
+    for (const id of instances.keys()) {
+      const profile = profiles.find(id);
+      if (profile && profile.proxy) {
+        timezone.refreshProxy(profile.proxy);
+      }
+    }
+  }, 15 * 60 * 1000).unref();
   if (profiles.all().length === 0) {
     profiles.add("Personal");
   }

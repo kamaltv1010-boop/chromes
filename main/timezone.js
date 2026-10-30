@@ -1,12 +1,13 @@
 "use strict";
-const { net } = require("electron");
+const crypto = require("crypto");
 
-/// The time zone pages see: the one of the connection's public address (a
-/// VPN's, when one is on), as a visitor from there has, so a site that
-/// compares the two finds them agreeing. It is asked of services that
-/// answer without a key, tried in turn; when none answers, pages see the
-/// system's. The last one found is kept, to show from the next launch on
-/// while it is asked again.
+/// The time zone pages see: the one of the public address sites see them
+/// come from, as a visitor from there has, so a site that compares the two
+/// finds them agreeing: the connection's (a VPN's, when one is on), or for
+/// a profile with a proxy, the proxy's, asked through it. It is asked of
+/// services that answer without a key, tried in turn; when none answers,
+/// pages see the system's. The last one found is kept, to show from the
+/// next launch on while it is asked again.
 const SERVICES = [
   { url: "https://ipwho.is/", zone: (data) => data && data.timezone && data.timezone.id },
   { url: "https://ipapi.co/json/", zone: (data) => data && data.timezone },
@@ -29,12 +30,33 @@ const isZone = (id) => {
   }
 };
 
+/// A fetch that goes through `proxy`, as the profile's Chrome does: a
+/// network session of its own (in memory only) told to use the proxy.
+const fetchThroughProxy = (proxy) => {
+  let ready = null;
+  return async (url, options) => {
+    const { session } = require("electron");
+    if (!ready) {
+      const ses = session.fromPartition(`noor-timezone-${crypto.createHash("sha256").update(proxy).digest("hex").slice(0, 16)}`, { cache: false });
+      ready = ses.setProxy({ proxyRules: proxy }).then(() => ses);
+    }
+    const ses = await ready;
+    return ses.fetch(url, options);
+  };
+};
+
+/// Where the zone found through a proxy is kept.
+const proxyKey = (proxy) => `timezone.proxy.${crypto.createHash("sha256").update(proxy).digest("hex").slice(0, 16)}`;
+
 class Timezone {
-  /// `fetch` stands in for the network in tests; `forced` is a zone to
-  /// show without asking (tests).
-  constructor(store, { fetch = (url, options) => net.fetch(url, options), forced = null } = {}) {
+  /// `fetch` and `fetchThrough` (a proxy's fetch) stand in for the network
+  /// in tests; `forced` is a zone to show without asking (tests).
+  constructor(store, { fetch = (url, options) => require("electron").net.fetch(url, options), fetchThrough = fetchThroughProxy, forced = null } = {}) {
     this.store = store;
     this.fetch = fetch;
+    this.fetchThrough = fetchThrough;
+    /// Each proxy's fetch, and its lookup under way.
+    this.proxies = new Map();
     this.forced = isZone(forced) ? forced : null;
     const last = store.get("timezone.last", null);
     this.zone = isZone(last) ? last : null;
@@ -57,6 +79,22 @@ class Timezone {
     return this.enabled() ? this.forced || this.zone : null;
   }
 
+  /// The zone a profile's pages see: its proxy's, when it has one (null
+  /// until it is found), else the connection's.
+  for(proxy) {
+    if (!proxy) {
+      return this.current;
+    }
+    if (!this.enabled()) {
+      return null;
+    }
+    if (this.forced) {
+      return this.forced;
+    }
+    const known = this.store.get(proxyKey(proxy), null);
+    return isZone(known) ? known : null;
+  }
+
   onChange(listener) {
     this.listeners.push(listener);
   }
@@ -71,11 +109,12 @@ class Timezone {
     }
   }
 
-  /// The address's zone from the first service that answers, or null.
-  async lookup() {
+  /// The address's zone from the first service that answers (through
+  /// `fetch`), or null.
+  async lookup(fetch = this.fetch) {
     for (const service of SERVICES) {
       try {
-        const response = await this.fetch(service.url, {
+        const response = await fetch(service.url, {
           cache: "no-store",
           credentials: "omit",
           headers: { accept: "application/json" },
@@ -107,6 +146,39 @@ class Timezone {
     }
   }
 
+  /// Asks through `proxy` (once at a time), and keeps the zone found for it.
+  refreshProxy(proxy) {
+    if (!proxy || this.forced) {
+      return Promise.resolve();
+    }
+    let entry = this.proxies.get(proxy);
+    if (!entry) {
+      entry = { fetch: this.fetchThrough(proxy), asking: null };
+      this.proxies.set(proxy, entry);
+    }
+    if (!entry.asking) {
+      entry.asking = this.lookup(entry.fetch).then((zone) => {
+        entry.asking = null;
+        if (zone && zone !== this.store.get(proxyKey(proxy), null)) {
+          this.store.set(proxyKey(proxy), zone);
+          this.notify();
+        }
+      }, () => { entry.asking = null; });
+    }
+    return entry.asking;
+  }
+
+  /// The zone of `proxy`, asked first if it isn't known yet (for at most
+  /// `ms`): what a profile opening with that proxy shows from its first page.
+  async forOpening(proxy, ms = 8000) {
+    if (proxy && this.enabled() && !this.for(proxy)) {
+      await Promise.race([this.refreshProxy(proxy), new Promise((resolve) => setTimeout(resolve, ms))]);
+    } else if (proxy && this.enabled()) {
+      this.refreshProxy(proxy);
+    }
+    return this.for(proxy);
+  }
+
   /// Asks now, and again every so often (an address changes when a VPN
   /// goes on or off).
   start() {
@@ -126,4 +198,4 @@ class Timezone {
   }
 }
 
-module.exports = { Timezone, isZone, SERVICES };
+module.exports = { Timezone, isZone, SERVICES, proxyKey };

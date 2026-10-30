@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("vm");
-const { pageScript, workerScript, hostOfWorker, NAME } = require("../main/inject");
+const { pageScript, workerScript, hostOfWorker, isSignInSite, NAME, KEY, MARK } = require("../main/inject");
 const { blockedFor } = require("../main/trackers");
 
 const config = { seeds: { canvas: 1, webGL: 2, audio: null, clientRects: null }, screen: { width: 2560, height: 1440 }, hardware: { cores: 8, memory: 8 } };
@@ -10,15 +10,35 @@ const config = { seeds: { canvas: 1, webGL: 2, audio: null, clientRects: null },
 test("the page and worker scripts parse and carry the config", () => {
   const page = pageScript(config);
   new vm.Script(page);
-  assert.ok(page.includes('"canvas":1') && page.includes("framesHidden: true"));
-  // The protection, as the text compiled in the frame (or, failing that, here).
-  const source = JSON.parse(/const SOURCE = (".*");\n/.exec(page)[1]);
-  new vm.Script(source);
-  assert.ok(source.includes("const protectPage = ") && source.endsWith(`//# sourceURL=${NAME}`));
+  assert.ok(page.includes('"canvas":1') && page.includes("framesHidden: true") && page.includes("key: KEY"));
+  // The protection is the script's own code, made in the hidden frame (or, failing that, here).
+  assert.ok(page.includes("const protectPage = ") && page.endsWith(`//# sourceURL=${NAME}`));
   const worker = workerScript(config, "https://example.com/w.js");
   new vm.Script(worker);
   assert.ok(worker.includes('"host":"example.com"') && worker.includes("protectPage(self") && !worker.includes('"framesHidden":true'));
   assert.ok(workerScript(config, "https://example.com/w.js", true).includes('"framesHidden":true'));
+});
+
+test("nothing is compiled from text, which a page's policy (CSP) could forbid and report to its site", () => {
+  assert.ok(!/\beval\b|new Function\(/.test(pageScript(config)));
+});
+
+test("the hidden frame hands the page the protection, made in its own realm", () => {
+  const element = { [KEY]: true };
+  vm.runInNewContext(pageScript(config), { location: { protocol: "about:" }, window: { frameElement: element } });
+  assert.equal(typeof element[KEY], "function");
+});
+
+test("a replacement's mark is this run's, which no page knows", () => {
+  assert.match(MARK, /^[0-9a-f]{16}$/);
+  for (const script of [pageScript(config), workerScript(config, "https://example.com/w.js", true)]) {
+    assert.ok(!script.includes("noor lookalike") && script.includes(`/* ${MARK} */`));
+  }
+});
+
+test("sign-in sites are known by their host", () => {
+  assert.ok(isSignInSite("https://accounts.google.com/signin") && isSignInSite("https://www.instagram.com/"));
+  assert.ok(!isSignInSite("https://www.google.com/") && !isSignInSite("nonsense"));
 });
 
 test("the scripts go by a name of their own for the run, with nothing of the app in it", () => {

@@ -35,6 +35,101 @@ def part(name, **replacements):
 
 
 shared = part("private static let shared")
+
+
+def swap(text, old, new, what):
+    assert text.count(old) == 1, f"{what} not found once"
+    return text.replace(old, new)
+
+
+# One state for the page's copies of the script. Chrome runs the script in
+# every document, so each frame of a page and each window it opens has a
+# copy of its own; a copy that only knew its own state would give a canvas
+# drawn in the page its real pixels when read through a frame's built-ins.
+# A copy takes the state of the copy in its parent (or opener), asked
+# through that window's Function.prototype.toString with a symbol only the
+# copies can make (the app's key for the run, see main/inject.js).
+shared = swap(shared, """    // Each replacement's real built-in, for its toString() and for calling it.
+    const originals = new WeakMap();
+    const native""", """    // Each replacement's real built-in, for its toString() and for calling it
+    // (`originals`, below).
+    const native""", "originals")
+shared = swap(shared, """    // The windows protected from this script, each once.
+    const protectedWindows = new WeakSet();
+    // The audio buffers the browser rendered or decoded, from any window, and
+    // the channels of them already changed.
+    const rendered = new WeakSet();
+    const nudged = new WeakMap();
+    // Each canvas's context: its kind, "webgl" or "canvas", and the settings
+    // it was made with, from any window.
+    const kinds = new WeakMap();
+    // The canvases holding what a device's rendering decided (text, paths,
+    // images…), the only ones that get noise, and those a clip limits.
+    const painted = new WeakSet();
+    const clipped = new WeakSet();
+    // Each canvas's (or WebGL context's) candidate pixels, computed lately.
+    const marks = new WeakMap();
+""", """    // What the copies of this script in a page share: the frames of a page
+    // and the windows it opens each run a copy, and one that reaches the copy
+    // of its parent or opener takes that one's state, so every copy knows
+    // every replacement and every canvas, buffer and context, whichever
+    // window's built-ins a page reads them with. The copies ask each other
+    // through the other window's Function.prototype.toString, reached through
+    // prototypes and property descriptors only (no getter or proxy of a page
+    // runs), called with a symbol only they can make, and only once its
+    // source shows the mark of this run: a page's own function is never
+    // called. Elsewhere (a worker, the top of a tab) a copy starts the state.
+    const reflectApply = Reflect.apply;
+    const sharedToken = config.key ? Symbol.for(config.key) : null;
+    const toStringOf = (object) => {
+      try {
+        let last = object;
+        for (let next = getPrototypeOf(last), i = 0; next !== null && i < 64; next = getPrototypeOf(next), i++) last = next;
+        const objectToString = getOwnPropertyDescriptor(last, "toString");
+        const functionProto = objectToString && typeof objectToString.value === "function" ? getPrototypeOf(objectToString.value) : null;
+        const own = functionProto && getOwnPropertyDescriptor(functionProto, "toString");
+        return own && typeof own.value === "function" ? own.value : null;
+      } catch (e) {
+        return null;
+      }
+    };
+    const shared = (() => {
+      if (sharedToken !== null) {
+        const near = [];
+        try { near.push(window.frameElement); } catch (e) {}
+        try { near.push(window.opener); } catch (e) {}
+        for (const other of near) {
+          try {
+            const asked = other ? toStringOf(other) : null;
+            if (asked && reflectApply(nativeToString, asked, []).indexOf(MARK) !== -1) {
+              const state = reflectApply(asked, sharedToken, []);
+              if (state && typeof state === "object" && state.originals) return state;
+            }
+          } catch (e) {}
+        }
+      }
+      return {
+        originals: new WeakMap(),
+        // The windows protected, each once.
+        protectedWindows: new WeakSet(),
+        // The audio buffers the browser rendered or decoded, from any
+        // window, and the channels of them already changed.
+        rendered: new WeakSet(),
+        nudged: new WeakMap(),
+        // Each canvas's context: its kind, "webgl" or "canvas", and the
+        // settings it was made with, from any window.
+        kinds: new WeakMap(),
+        // The canvases holding what a device's rendering decided (text,
+        // paths, images…), the only ones that get noise, and those a clip
+        // limits.
+        painted: new WeakSet(),
+        clipped: new WeakSet(),
+        // Each canvas's (or WebGL context's) candidate pixels, computed lately.
+        marks: new WeakMap(),
+      };
+    })();
+    const { originals, protectedWindows, rendered, nudged, kinds, painted, clipped, marks } = shared;
+""", "shared state")
 helpers = part("private static let helpers")
 # A worker held before its first line has no location yet, so a worker's
 # script is told the page's host instead.
@@ -46,6 +141,11 @@ helpers = helpers.replace(HOST, "    const host = config.host != null ? String(c
 HOSTED = "    const hosted = {};\n"
 assert HOSTED in helpers, "hosted not found in helpers"
 helpers = helpers.replace(HOSTED, "    const hosted = config;\n")
+# The copies ask each other for the state through toString (see `shared`).
+helpers = swap(helpers, """    window.Function.prototype.toString = lookalike(windowToString, function () {
+      const source""", """    window.Function.prototype.toString = lookalike(windowToString, function () {
+      if (sharedToken !== null && this === sharedToken) return shared;
+      const source""", "toString")
 frames = part("private static let framesScript")
 # Chrome is Chrome: what the Noor browser adds to look like it (its brands,
 # chrome.*, permissions, languages) is Chrome's own here, so only the
@@ -61,10 +161,25 @@ parts = [
     ("config.seeds.audio != null", part("func audioScript", seed="config.seeds.audio")),
     ("config.seeds.clientRects != null", part("func clientRectsScript", seed="config.seeds.clientRects")),
     ("config.screen", part("func screenScript", **{"size.width": "config.screen.width", "size.height": "config.screen.height"})
-        # On Windows the taskbar takes the bottom of the screen, so availHeight is less than height.
-        .replace('for (const name of ["height", "availHeight"]) defineGetter(window.Screen.prototype, name, () => height);',
-                 'defineGetter(window.Screen.prototype, "height", () => height);\n'
-                 '          defineGetter(window.Screen.prototype, "availHeight", () => height - 48);')),
+        # On Windows the taskbar takes the bottom of the screen, so
+        # availHeight is less than height. In the frames of a page Chrome
+        # itself shows the profile's screen (the app tells it, see
+        # main/chrome.js), to CSS as to scripts, so only availHeight is
+        # changed there; the others (another site's frames) get it all here.
+        .replace('for (const name of ["width", "availWidth"]) defineGetter(window.Screen.prototype, name, () => width);\n'
+                 '          for (const name of ["height", "availHeight"]) defineGetter(window.Screen.prototype, name, () => height);',
+                 'const shown = (name) => {\n'
+                 '            try { return getOwnPropertyDescriptor(window.Screen.prototype, name).get.call(window.screen); } catch (e) { return undefined; }\n'
+                 '          };\n'
+                 '          const byChrome = shown("width") === width && shown("height") === height;\n'
+                 '          if (!byChrome) {\n'
+                 '            for (const name of ["width", "availWidth"]) defineGetter(window.Screen.prototype, name, () => width);\n'
+                 '            defineGetter(window.Screen.prototype, "height", () => height);\n'
+                 '          }\n'
+                 '          defineGetter(window.Screen.prototype, "availHeight", () => height - 48);\n'
+                 '          if (!byChrome) {')
+        .replace('              return written.get(this) || value;\n            });\n          }\n',
+                 '              return written.get(this) || value;\n            });\n          }\n          }\n')),
     ("config.hardware", (
         "// Hardware: pages see a common PC's core count and memory instead of\n"
         "// this one's, in workers too.\n"

@@ -66,7 +66,8 @@
       name.className = "name";
       name.textContent = profile.name;
       const details = document.createElement("small");
-      details.textContent = `${profile.screen.width} × ${profile.screen.height} · ${profile.hardware.cores} cores · ${profile.hardware.memory} GB` + (profile.proxy ? ` · proxy ${profile.proxy}` : "");
+      details.textContent = `${profile.screen.width} × ${profile.screen.height} · ${profile.hardware.cores} cores · ${profile.hardware.memory} GB`
+        + (profile.proxy ? ` · proxy ${profile.proxy}` + (settings.timezoneFromIP ? ` · ${profile.zone || "time zone not found yet"}` : "") : "");
       name.append(details);
       const controls = document.createElement("div");
       controls.style.display = "flex";
@@ -110,9 +111,9 @@
     }
     $("timezonehint").textContent = settings.timezoneFromIP
       ? (settings.timezone
-        ? `Pages see ${settings.timezone}, the time zone where your connection is (a VPN's or proxy's), as a visitor from there would.`
-        : "Pages see the time zone where your connection is. It couldn't be found yet; pages see this PC's for now.")
-      : "Pages see this PC's time zone. On, they see the one where your connection is (a VPN's or proxy's).";
+        ? `Pages see ${settings.timezone}, the time zone where your connection is (a VPN's), as a visitor from there would; a profile with a proxy sees its proxy's.`
+        : "Pages see the time zone where your connection is (a profile with a proxy, its proxy's). It couldn't be found yet; pages see this PC's for now.")
+      : "Pages see this PC's time zone. On, they see the one where your connection is (a VPN's, or a profile's proxy).";
     $("version").textContent = settings.version;
   };
 
