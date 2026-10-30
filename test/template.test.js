@@ -115,3 +115,23 @@ test("the template is a profile of its own, apart from the user's", () => {
   assert.equal(profile.proxy, "");
   assert.equal(template.localStateForCopy({ variations_seed: "x" }), null);
 });
+
+test("a copy that fails leaves the new profile as it was, and says why", { skip: process.platform === "win32" }, () => {
+  const { root, dir } = makeTemplate();
+  // A file Node can't copy (a pipe), as a file Chrome holds open would be.
+  require("child_process").execFileSync("mkfifo", [path.join(dir, "Default", "Extension Rules", "held")]);
+  const profileDir = path.join(root, "profiles", "failing");
+  assert.throws(() => template.copyInto(dir, profileDir));
+  assert.equal(fs.existsSync(profileDir), false);
+  assert.equal(fs.existsSync(`${profileDir}.copying`), false);
+});
+
+test("a profile's extensions are read again once Chrome rewrites its record", () => {
+  const { dir } = makeTemplate();
+  assert.equal(template.installedExtensions(dir).length, 2);
+  const file = path.join(dir, "Default", "Secure Preferences");
+  const prefs = JSON.parse(fs.readFileSync(file, "utf8"));
+  delete prefs.extensions.settings[UNPACKED_ID];
+  fs.writeFileSync(file, JSON.stringify(prefs, null, 1));
+  assert.deepEqual(template.installedExtensions(dir).map((e) => e.id), [STORE_ID]);
+});

@@ -63,3 +63,22 @@ test("config: noise seeds for what is on (audio and ClientRects off at first), a
   assert.equal(fingerprint.config(a).screen, null);
   assert.deepEqual(KINDS, ["canvas", "webGL", "audio", "clientRects", "screen", "hardware"]);
 });
+
+test("with screen or hardware protection off, a profile shows this PC's own, as its pages see them", () => {
+  const { profiles, fingerprint } = make();
+  fingerprint.realHardware = { cores: 4, memory: 8 };
+  const a = profiles.add("A");
+  const on = fingerprint.shown(a);
+  assert.deepEqual(on.screen, fingerprint.screen(a));
+  assert.deepEqual(on.hardware, fingerprint.hardware(a));
+  assert.equal(on.realScreen || on.realHardware, false);
+  fingerprint.setEnabled("screen", false);
+  fingerprint.setEnabled("hardware", false);
+  assert.deepEqual(fingerprint.shown(a), { screen: { width: 1280, height: 800 }, hardware: { cores: 4, memory: 8 }, realScreen: true, realHardware: true });
+});
+
+test("this PC's memory as Chrome tells pages: the nearest power of two, from 0.25 to 8 GB", () => {
+  const { deviceMemory } = require("../main/fingerprint");
+  const gb = 1024 ** 3;
+  assert.deepEqual([0.1, 0.5, 3, 4, 6, 7.8, 16, 64].map((n) => deviceMemory(n * gb)), [0.25, 0.5, 2, 4, 4, 8, 8, 8]);
+});

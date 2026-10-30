@@ -1,9 +1,10 @@
 "use strict";
+const os = require("os");
 const path = require("path");
 const { app, BrowserWindow, ipcMain, dialog, screen, shell } = require("electron");
 const { Store } = require("./store");
 const { Profiles } = require("./profiles");
-const { Fingerprint, KINDS } = require("./fingerprint");
+const { Fingerprint, KINDS, deviceMemory } = require("./fingerprint");
 const { Timezone } = require("./timezone");
 const { ChromeInstance, findChrome } = require("./chrome");
 const { pageScript, workerScript } = require("./inject");
@@ -26,7 +27,9 @@ const profileOf = (id) => (id === template.TEMPLATE_ID ? template.templateProfil
 const templateDir = () => profiles.dir(template.templateProfile());
 
 const state = () => ({
-  profiles: profiles.all().map((p) => ({ ...p, running: instances.has(p.id), screen: fingerprint.screen(p), hardware: fingerprint.hardware(p), zone: p.proxy ? timezone.for(p.proxy) : null })),
+  // What each profile's pages see (this PC's screen and hardware while
+  // those protections are off), and how many extensions it has.
+  profiles: profiles.all().map((p) => ({ ...p, running: instances.has(p.id), ...fingerprint.shown(p), zone: p.proxy ? timezone.for(p.proxy) : null, extensions: template.installedExtensions(profiles.dir(p)).length })),
   template: { id: template.TEMPLATE_ID, running: instances.has(template.TEMPLATE_ID), extensions: template.installedExtensions(templateDir()) },
   protections: Object.fromEntries(KINDS.map((kind) => [kind, fingerprint.isEnabled(kind)])),
   blockTrackers: store.get("blockTrackers", true) !== false,
@@ -135,9 +138,11 @@ const registerIPC = () => {
   handle("state", () => state());
   handle("profiles:add", async (name) => {
     // A new profile starts with the template's extensions, copied from it
-    // as its Chrome left them (closed first, so they are all written).
+    // as its Chrome left them: closed first, so everything is written
+    // (Chrome writes an extension just added only a few seconds later, or
+    // as it closes) and no file is held open.
     const templateChrome = instances.get(template.TEMPLATE_ID);
-    if (templateChrome && template.installedExtensions(templateDir()).length) {
+    if (templateChrome) {
       await templateChrome.close();
       await exited(templateChrome);
     }
@@ -145,7 +150,12 @@ const registerIPC = () => {
     try {
       template.copyInto(templateDir(), profiles.dir(profile));
     } catch (error) {
-      // It starts without them rather than not at all.
+      // It starts without them rather than not at all, and the user knows.
+      dialog.showMessageBox(win, {
+        type: "warning",
+        message: `"${profile.name}" was added without the template's extensions`,
+        detail: `They couldn't be copied: ${error.message || error}`,
+      });
     }
   });
   handle("profiles:rename", (id, name) => { profiles.rename(id, name); });
@@ -228,6 +238,7 @@ app.whenReady().then(async () => {
   fingerprint = new Fingerprint(store, profiles);
   const display = screen.getPrimaryDisplay();
   fingerprint.realScreen = { width: display.size.width, height: display.size.height };
+  fingerprint.realHardware = { cores: os.cpus().length, memory: deviceMemory(os.totalmem()) };
   timezone = new Timezone(store, { forced: process.env.NOOR_TEST_TIMEZONE || null });
   timezone.onChange(() => {
     for (const [id, instance] of instances) {
@@ -250,6 +261,13 @@ app.whenReady().then(async () => {
   if (profiles.all().length === 0) {
     profiles.add("Personal");
   }
+  // While the template's Chrome is open, its extensions as Chrome writes
+  // them reach the window.
+  setInterval(() => {
+    if (instances.has(template.TEMPLATE_ID)) {
+      push();
+    }
+  }, 5000).unref();
 
   win = new BrowserWindow({
     width: 560,

@@ -93,9 +93,32 @@ const localized = (dir, manifest, text) => {
   return key && messages[key] && typeof messages[key].message === "string" ? messages[key].message : text;
 };
 
+/// What was last read of each profile, by folder, while its two files stay
+/// as they were: the window asks for every profile's extensions often.
+const cache = new Map();
+const stamp = (defaultDir) => ["Preferences", "Secure Preferences"].map((file) => {
+  try {
+    const info = fs.statSync(path.join(defaultDir, file));
+    return `${info.mtimeMs}:${info.size}`;
+  } catch (error) {
+    return "-";
+  }
+}).join("|");
+
 /// The user's extensions in the profile whose folder is `profileDir`: id,
 /// name, version, whether it is on and whether it came from a folder.
 const installedExtensions = (profileDir) => {
+  const key = stamp(path.join(profileDir, "Default"));
+  const cached = cache.get(profileDir);
+  if (cached && cached.key === key) {
+    return cached.found.map((extension) => ({ ...extension }));
+  }
+  const found = readExtensions(profileDir);
+  cache.set(profileDir, { key, found });
+  return found.map((extension) => ({ ...extension }));
+};
+
+const readExtensions = (profileDir) => {
   const defaultDir = path.join(profileDir, "Default");
   const found = [];
   for (const [id, entry] of Object.entries(entriesOf(defaultDir))) {
@@ -149,33 +172,50 @@ const localStateForCopy = (localState) => (localState && localState.os_crypt ? {
 /// Gives a new profile, whose folder is `profileDir` and which Chrome hasn't
 /// opened yet, the template's extensions (the template's Chrome closed).
 /// What it got: the extensions, none if the template has none or the
-/// profile was opened before.
+/// profile was opened before. All of it is copied first to a folder beside
+/// the profile's and put in place once whole: a copy that fails (a file
+/// held open) leaves the profile as it was, and throws.
 const copyInto = (templateDir, profileDir) => {
   const extensions = installedExtensions(templateDir);
-  const to = path.join(profileDir, "Default");
-  if (!extensions.length || fs.existsSync(path.join(to, "Preferences"))) {
+  if (!extensions.length || fs.existsSync(path.join(profileDir, "Default", "Preferences"))) {
     return [];
   }
-  const from = path.join(templateDir, "Default");
-  for (const part of EXTENSION_PARTS) {
-    copyPath(path.join(from, part), path.join(to, part));
-  }
-  // The extensions' own IndexedDB, not the sites'.
-  const indexedDB = path.join(from, "IndexedDB");
-  if (fs.existsSync(indexedDB)) {
-    for (const name of fs.readdirSync(indexedDB)) {
-      if (name.startsWith("chrome-extension_")) {
-        copyPath(path.join(indexedDB, name), path.join(to, "IndexedDB", name));
+  const staging = `${profileDir}.copying`;
+  fs.rmSync(staging, { recursive: true, force: true });
+  try {
+    const from = path.join(templateDir, "Default");
+    const to = path.join(staging, "Default");
+    fs.mkdirSync(to, { recursive: true });
+    for (const part of EXTENSION_PARTS) {
+      copyPath(path.join(from, part), path.join(to, part));
+    }
+    // The extensions' own IndexedDB, not the sites'.
+    const indexedDB = path.join(from, "IndexedDB");
+    if (fs.existsSync(indexedDB)) {
+      for (const name of fs.readdirSync(indexedDB)) {
+        if (name.startsWith("chrome-extension_")) {
+          copyPath(path.join(indexedDB, name), path.join(to, "IndexedDB", name));
+        }
       }
     }
-  }
-  const prefs = readJSON(path.join(to, "Preferences"));
-  if (prefs) {
-    fs.writeFileSync(path.join(to, "Preferences"), JSON.stringify(preferencesForCopy(prefs)));
-  }
-  const localState = localStateForCopy(readJSON(path.join(templateDir, "Local State")));
-  if (localState) {
-    fs.writeFileSync(path.join(profileDir, "Local State"), JSON.stringify(localState));
+    const prefs = readJSON(path.join(to, "Preferences"));
+    if (prefs) {
+      fs.writeFileSync(path.join(to, "Preferences"), JSON.stringify(preferencesForCopy(prefs)));
+    }
+    const localState = localStateForCopy(readJSON(path.join(templateDir, "Local State")));
+    if (localState) {
+      fs.writeFileSync(path.join(staging, "Local State"), JSON.stringify(localState));
+    }
+    if (fs.existsSync(profileDir)) {
+      fs.cpSync(staging, profileDir, { recursive: true });
+      fs.rmSync(staging, { recursive: true, force: true });
+    } else {
+      fs.mkdirSync(path.dirname(profileDir), { recursive: true });
+      fs.renameSync(staging, profileDir);
+    }
+  } catch (error) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    throw error;
   }
   return extensions;
 };

@@ -66,8 +66,14 @@
       name.className = "name";
       name.textContent = profile.name;
       const details = document.createElement("small");
-      details.textContent = `${profile.screen.width} × ${profile.screen.height} · ${profile.hardware.cores} cores · ${profile.hardware.memory} GB`
-        + (profile.proxy ? ` · proxy ${profile.proxy}` + (settings.timezoneFromIP ? ` · ${profile.zone || "time zone not found yet"}` : "") : "");
+      // What its pages see: this PC's own screen and hardware while those
+      // protections are off.
+      details.textContent = [
+        `${profile.realScreen ? "this PC's screen " : ""}${profile.screen.width} × ${profile.screen.height}`,
+        `${profile.realHardware ? "this PC's " : ""}${profile.hardware.cores} cores · ${profile.hardware.memory} GB`,
+        profile.extensions ? `${profile.extensions} extension${profile.extensions === 1 ? "" : "s"}` : "",
+        profile.proxy ? `proxy ${profile.proxy}` + (settings.timezoneFromIP ? ` · ${profile.zone || "time zone not found yet"}` : "") : "",
+      ].filter(Boolean).join(" · ");
       name.append(details);
       const controls = document.createElement("div");
       controls.style.display = "flex";

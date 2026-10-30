@@ -19,12 +19,23 @@ const SCREENS = [
 /// that is what every choice shows.
 const HARDWARE = [4, 6, 8, 12, 16].map((cores) => ({ cores, memory: 8 }));
 
+/// The memory Chrome tells pages (navigator.deviceMemory) for `bytes` of
+/// RAM: the nearest power of two, from 0.25 to 8 GB.
+const deviceMemory = (bytes) => {
+  const mb = Math.max(1, Math.floor(bytes / (1024 * 1024)));
+  const lower = 2 ** Math.floor(Math.log2(mb));
+  const nearest = mb - lower <= lower * 2 - mb ? lower : lower * 2;
+  return Math.min(8, Math.max(0.25, nearest / 1024));
+};
+
 class Fingerprint {
   constructor(store, profiles) {
     this.store = store;
     this.profiles = profiles;
-    /// This PC's screen in CSS pixels, set at launch.
+    /// This PC's screen in CSS pixels, and its cores and memory as Chrome
+    /// tells pages, set at launch.
     this.realScreen = { width: 0, height: 0 };
+    this.realHardware = { cores: 0, memory: 0 };
   }
 
   enabledKey(kind) {
@@ -95,6 +106,19 @@ class Fingerprint {
     return this.pick(this.seed("hardware", profile), HARDWARE);
   }
 
+  /// What a profile's pages see of the screen and hardware: the profile's,
+  /// or this PC's own while that protection is off.
+  shown(profile) {
+    const screen = this.isEnabled("screen");
+    const hardware = this.isEnabled("hardware");
+    return {
+      screen: screen ? this.screen(profile) : this.realScreen,
+      hardware: hardware ? this.hardware(profile) : this.realHardware,
+      realScreen: !screen,
+      realHardware: !hardware,
+    };
+  }
+
   visibleValue(seed, kind) {
     if (kind === "screen") {
       const s = this.pick(seed, this.screens());
@@ -132,4 +156,4 @@ class Fingerprint {
   }
 }
 
-module.exports = { Fingerprint, KINDS, NOISE_KINDS, SCREENS, HARDWARE };
+module.exports = { Fingerprint, KINDS, NOISE_KINDS, SCREENS, HARDWARE, deviceMemory };
