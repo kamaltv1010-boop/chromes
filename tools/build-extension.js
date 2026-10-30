@@ -46,7 +46,7 @@ if (!/^(https?|file|data|blob|about):$/.test(location.protocol)) return;
 try {
   if (Function.prototype.toString.call(function () { /* noor lookalike */ }).indexOf("noor lookalike") === -1) return;
 } catch (e) {}
-const configFrom = ${configFrom.toString()};
+const configFrom = ${configFrom.toString().replace(/\r\n/g, "\n")};
 const config = configFrom(bits);
 ${protectSource}
 try {
