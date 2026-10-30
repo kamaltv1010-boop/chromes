@@ -1,5 +1,6 @@
-# Builds Noor for Chrome: a portable .exe and an installer. Every build
-# of main becomes a release (v1.0.<run number>) with both files attached,
+# Builds Noor for Chrome: a portable .exe and an installer, and Noor for
+# Edge, the extension, as a .zip. Every build of main becomes a release
+# (v1.0.<run number>) with the three files attached,
 # so every version stays available and can be gone back to; a pushed tag
 # like v1.2.0 makes a release of that version. Nothing is code-signed, so
 # Windows SmartScreen asks once before the first run ("More info" > "Run
@@ -63,16 +64,25 @@ jobs:
             echo '```'
             echo
             echo "Windows 10/11, 64-bit. The portable .exe runs without installing; the Setup .exe installs. SmartScreen asks once: More info, then Run anyway."
+            echo
+            echo "Noor-Edge-*.zip is Noor for Edge, the extension (Edge or Chrome): Canvas, WebGL, audio and ClientRects noise on every site. Unzip it, then edge://extensions > Developer mode > Load unpacked."
           } > release-notes.md
 
       - name: Build the .exe
         run: npm run dist
 
+      # The extension, at this build's version, with a mark of its own.
+      - name: Pack Noor for Edge
+        shell: bash
+        run: node tools/build-extension.js --pack "$NOOR_VERSION"
+
       - name: Keep the .exe
         uses: actions/upload-artifact@v4
         with:
           name: NoorChrome-windows-${{ env.NOOR_VERSION }}
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/*.zip
           if-no-files-found: error
 
       - name: Publish the release
@@ -82,5 +92,7 @@ jobs:
           name: Noor for Chrome ${{ env.NOOR_VERSION }}
           target_commitish: ${{ github.sha }}
           body_path: release-notes.md
-          files: dist/*.exe
+          files: |
+            dist/*.exe
+            dist/*.zip
           fail_on_unmatched_files: true

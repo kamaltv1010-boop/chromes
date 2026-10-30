@@ -1,0 +1,66 @@
+{
+  "extName": {
+    "message": "نور – الحماية من البصمة"
+  },
+  "extDescription": {
+    "message": "تشويش على Canvas وWebGL والصوت وClientRects في كل موقع قبل أول سطر منه، بنفس القيم في كل زيارة للموقع. من متصفح نور."
+  },
+  "tagline": {
+    "message": "الحماية من البصمة"
+  },
+  "siteOn": {
+    "message": "الحماية مفعّلة في هذا الموقع"
+  },
+  "siteOff": {
+    "message": "الحماية متوقفة في هذا الموقع، ويرى القيم الحقيقية"
+  },
+  "notWeb": {
+    "message": "هذه الصفحة ليست موقعاً: لا شيء لحمايته هنا."
+  },
+  "canvas": {
+    "message": "Canvas"
+  },
+  "canvasHint": {
+    "message": "الصور التي ترسمها الصفحات"
+  },
+  "webGL": {
+    "message": "WebGL"
+  },
+  "webGLHint": {
+    "message": "الرسم ثلاثي الأبعاد كما تُخرجه بطاقة الرسوميات"
+  },
+  "audio": {
+    "message": "الصوت"
+  },
+  "audioHint": {
+    "message": "الصوت كما يعالجه الحاسوب. متوقف في البداية: في الحاسوب هذه القيم شبه متطابقة عند الجميع، فالتشويش فيها يميّز المتصفح بدل أن يخفيه."
+  },
+  "clientRects": {
+    "message": "ClientRects"
+  },
+  "clientRectsHint": {
+    "message": "قياسات ما تعرضه الصفحة. متوقف في البداية لنفس سبب الصوت."
+  },
+  "newValues": {
+    "message": "جديد"
+  },
+  "newValuesTitle": {
+    "message": "قيم جديدة في كل المواقع"
+  },
+  "changeAll": {
+    "message": "تغيير الكل"
+  },
+  "note": {
+    "message": "يرى كل موقع قيمه الخاصة، نفسها في كل زيارة. يُطبّق أي تغيير عند إعادة تحميل الصفحة."
+  },
+  "changed": {
+    "message": "تمّ، وأُعيد تحميل الصفحة."
+  },
+  "failed": {
+    "message": "لم ينجح ذلك. حاول مرة أخرى."
+  },
+  "dir": {
+    "message": "rtl",
+    "description": "The direction of these messages' language: ltr or rtl."
+  }
+}

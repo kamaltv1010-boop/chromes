@@ -1,0 +1,5 @@
+# Generated scripts keep LF everywhere, so the tests can compare them with
+# what their tools make, on Windows too.
+scripts/*.js text eol=lf
+extension/realm.js text eol=lf
+extension/bits/*.js text eol=lf

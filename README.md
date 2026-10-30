@@ -2,6 +2,8 @@
 
 برنامج لـ Windows كيفتح **Google Chrome نفسو** ببروفايلات، كل بروفايل عندو **البصمات ديالو** (Canvas، WebGL، حجم الشاشة، البروسيسور والذاكرة، المنطقة الزمنية ديال الـ IP)، **البيانات ديالو** (cookies، حسابات، extensions، historique)، و**proxy ديالو** إلا بغيتي. نفس الحماية ديال [متصفح Noor](https://github.com/kamaltv1010-boop/noor-windows) ولكن داخل Chrome الحقيقي، فالمواقع كتشوف Chrome عادي بكلشي فيه.
 
+وكاينة حتى **[Noor for Edge](#noor-for-edge-extension-)**: إضافة (extension) لـ Microsoft Edge (وChrome) فيها الحماية ديال Canvas وWebGL والصوت وClientRects، بلا برنامج.
+
 ## كيفاش كيخدم
 
 - **بروفايلات**: كل بروفايل عندو folder ديالو (`--user-data-dir`) فChrome كيحتافظ فيه بكلشي ديالو، منفصل على البروفايلات الأخرى وعلى Chrome ديالك العادي.
@@ -21,6 +23,28 @@ Chrome المفتوح من Noor كيتسد فاش يتسد Noor، حيت بلا 
 
 من [Releases](https://github.com/kamaltv1010-boop/chromes/releases): `NoorChrome-Setup-<version>-windows-x64.exe` (installer) أو `NoorChrome-<version>-windows-x64-portable.exe`. خاص Google Chrome يكون منصّب؛ إلا ماكانش فالبلاصة العادية، اختارو من الإعدادات.
 
+## Noor for Edge (extension) 🧩
+
+إضافة لـ **Microsoft Edge** (وكتخدم حتى فـ Google Chrome) فيها نفس الحماية ديال Noor: **Canvas**، **WebGL**، **الصوت** و**ClientRects**. ما خاصهاش البرنامج: كتزيدها لـ Edge ديالك وصافي.
+
+- **قبل أي سطر ديال الموقع**: فكل صفحة، فكل frame، وفكل نافذة كيحلها الموقع، الإضافة كتزيد ضجيج صغير فالقيم اللي كيقراو المواقع باش يعرفوك (نفس الكود ديال Noor، `scripts/protect.js`).
+- **قيم ثابتة لكل موقع**: كل موقع كيشوف قيم ديالو، نفسهم فكل زيارة، وموقع آخر كيشوف قيم أخرى، فما يقدروش يتبعوك من موقع لموقع. **جديد** حدا كل حماية كيعطي قيم جديدة، و**تغيير الكل** كيبدّل كلشي.
+- **الصوت وClientRects طافيين فالبداية** (بحال Noor لـ Windows): فالـ PC هاد القيم تقريباً نفسها عند الجميع، فالضجيج فيهم كيبيّن المتصفح بدل ما يخبيه. تقدر تشعلهم من النافذة ديال الإضافة.
+- **موقع بوحدو**: إلا شي موقع ما خدمش مزيان، طفي الحماية فيه بوحدو من النافذة ديال الإضافة.
+- **ما كتبانش**: الـ functions اللي كتبدّل كيبانو بحال ديال المتصفح، والصفحة ما كتلقى حتى أثر ديال الإضافة، حتى فالمواقع اللي عندها CSP قوي. كل Release عندو علامة (mark) ديالو، ماشي اللي كتبان هنا فالكود.
+- **كيفاش**: المتصفح كيشغّل ملفات الإضافة فالصفحة قبل الـ scripts ديالها (content script فالعالم ديال الصفحة). الإعدادات (القيم ديال كل حماية) كتوصل للصفحة بالملفات اللي كيتشغلو (`extension/bits/<n>.js`، واحد لكل bit)، حيت ملف ديال إضافة ما يقدرش يتبدل، وحتى موقع ما يقدر يعرف شمن ملف تشغّل.
+
+### التثبيت فـ Edge
+
+1. حمّل `Noor-Edge-<version>.zip` من [Releases](https://github.com/kamaltv1010-boop/chromes/releases) وفكّو (Extract all) فـ dossier غادي يبقى (ما تمسحوش من بعد).
+2. حل `edge://extensions` وشعل **Developer mode**.
+3. ضغط **Load unpacked** واختار الـ dossier اللي فكّيتي.
+4. باش يبان الزر ديالها: ضغط على 🧩 فالشريط، ومن بعد على 👁 حدا Noor.
+
+الصفحات اللي كانو محلولين خاصهم يتعاودو يتحلو (F5). فـ Chrome: نفس الشي من `chrome://extensions`. فـ InPrivate: شعل «Allow in InPrivate» فالإعدادات ديال الإضافة إلا بغيتيها تخدم تماك.
+
+**الحدود**: الـ workers (كود كتشغلو الصفحة فالخلفية) ما كتوصلهومش الحماية، حيت الإضافات ما كتقدرش تدخل ليهم؛ Noor for Chrome (البرنامج) كيحميهم.
+
 ## التطوير
 
 ```
@@ -29,6 +53,10 @@ npm start            # يفتح البرنامج
 npm test             # الاختبارات
 NOOR_CHROME=/path/to/chrome xvfb-run -a node tools/smoke-chrome.js   # اختبار كامل مع Chromium
 npm run dist         # يبني .exe
+node tools/build-extension.js --pack 1.0.0   # يبني dist/Noor-Edge-1.0.0.zip
+xvfb-run -a node tools/smoke-extension.js    # اختبار كامل ديال الإضافة فـ Chromium (Playwright)
 ```
+
+ملي يتبدل `scripts/protect.js`، عاود ولّد الملفات ديال الإضافة (`extension/realm.js` و`extension/bits/`) بـ `node tools/build-extension.js`.
 
 `scripts/protect.js` ما كيتبدلش بالإيد: كيتولّد من `AmirBrowser/FingerprintProtection.swift` ديال تطبيق iPhone بالأداة `tools/extract_from_ios.py` ديال مشروع noor-windows.

@@ -1,0 +1,66 @@
+{
+  "extName": {
+    "message": "Noor – Fingerprint Protection"
+  },
+  "extDescription": {
+    "message": "Canvas, WebGL, audio and ClientRects noise on every site, before its first line, with the same values on a site at every visit. From the Noor browser."
+  },
+  "tagline": {
+    "message": "Fingerprint protection"
+  },
+  "siteOn": {
+    "message": "Protected on this site"
+  },
+  "siteOff": {
+    "message": "Off on this site: it sees the real values"
+  },
+  "notWeb": {
+    "message": "This page isn’t a website: there’s nothing to protect here."
+  },
+  "canvas": {
+    "message": "Canvas"
+  },
+  "canvasHint": {
+    "message": "The pictures pages draw"
+  },
+  "webGL": {
+    "message": "WebGL"
+  },
+  "webGLHint": {
+    "message": "3D drawing, as the graphics card renders it"
+  },
+  "audio": {
+    "message": "Audio"
+  },
+  "audioHint": {
+    "message": "Sound as the computer processes it. Off at first: on a PC these values are nearly the same for everyone, so noise in them tells the browser apart."
+  },
+  "clientRects": {
+    "message": "ClientRects"
+  },
+  "clientRectsHint": {
+    "message": "The sizes of what a page shows. Off at first, for the same reason as audio."
+  },
+  "newValues": {
+    "message": "New"
+  },
+  "newValuesTitle": {
+    "message": "New values on every site"
+  },
+  "changeAll": {
+    "message": "Change All"
+  },
+  "note": {
+    "message": "Each site sees values of its own, the same at every visit. A change applies as the page reloads."
+  },
+  "changed": {
+    "message": "Done. The page reloaded with it."
+  },
+  "failed": {
+    "message": "That didn’t work. Try again."
+  },
+  "dir": {
+    "message": "ltr",
+    "description": "The direction of these messages' language: ltr or rtl."
+  }
+}

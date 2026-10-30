@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Noor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/48.png" alt="" width="36" height="36">
+    <div>
+      <h1>Noor</h1>
+      <p data-i18n="tagline"></p>
+    </div>
+  </header>
+
+  <section id="site" class="card" hidden>
+    <div class="row">
+      <div class="text">
+        <div class="label" id="siteName"></div>
+        <div class="hint" id="siteState"></div>
+      </div>
+      <label class="switch"><input type="checkbox" id="siteOn"><span></span></label>
+    </div>
+  </section>
+  <p id="notWeb" class="small" data-i18n="notWeb" hidden></p>
+
+  <section id="kinds" class="card"></section>
+
+  <button id="changeAll" data-i18n="changeAll"></button>
+  <p class="small" id="note" data-i18n="note"></p>
+
+  <script src="core.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+{
+  "extName": {
+    "message": "Noor – Protection contre l’empreinte"
+  },
+  "extDescription": {
+    "message": "Du bruit sur Canvas, WebGL, l’audio et ClientRects sur chaque site, avant sa première ligne, avec les mêmes valeurs à chaque visite. Du navigateur Noor."
+  },
+  "tagline": {
+    "message": "Protection contre l’empreinte"
+  },
+  "siteOn": {
+    "message": "Protégé sur ce site"
+  },
+  "siteOff": {
+    "message": "Désactivé sur ce site : il voit les vraies valeurs"
+  },
+  "notWeb": {
+    "message": "Cette page n’est pas un site web : rien à protéger ici."
+  },
+  "canvas": {
+    "message": "Canvas"
+  },
+  "canvasHint": {
+    "message": "Les images que dessinent les pages"
+  },
+  "webGL": {
+    "message": "WebGL"
+  },
+  "webGLHint": {
+    "message": "Le dessin 3D, tel que le rend la carte graphique"
+  },
+  "audio": {
+    "message": "Audio"
+  },
+  "audioHint": {
+    "message": "Le son tel que l’ordinateur le traite. Désactivé au départ : sur un PC ces valeurs sont presque les mêmes pour tous, donc du bruit les rendrait reconnaissables."
+  },
+  "clientRects": {
+    "message": "ClientRects"
+  },
+  "clientRectsHint": {
+    "message": "Les dimensions de ce qu’affiche une page. Désactivé au départ, pour la même raison que l’audio."
+  },
+  "newValues": {
+    "message": "Nouveau"
+  },
+  "newValuesTitle": {
+    "message": "De nouvelles valeurs sur tous les sites"
+  },
+  "changeAll": {
+    "message": "Tout changer"
+  },
+  "note": {
+    "message": "Chaque site voit ses propres valeurs, les mêmes à chaque visite. Un changement s’applique au rechargement de la page."
+  },
+  "changed": {
+    "message": "C’est fait. La page a été rechargée."
+  },
+  "failed": {
+    "message": "Cela n’a pas marché. Réessayez."
+  },
+  "dir": {
+    "message": "ltr",
+    "description": "The direction of these messages' language: ltr or rtl."
+  }
+}
