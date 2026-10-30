@@ -19,6 +19,19 @@
 
 Chrome المفتوح من Noor كيتسد فاش يتسد Noor، حيت بلا Noor الصفحات الجديدة غادي تبقى بلا حماية.
 
+## الإضافات لكل بروفايل جديد 🧩
+
+فالبرنامج كاين قسم **Extensions for New Profiles**: بروفايل خاص (نموذج) فين كتزيد الإضافات اللي بغيتي مرة وحدة، وكل بروفايل جديد كتصاوبو من بعد كيبدا بيهم أوتوماتيكياً.
+
+1. ضغط **Open Chrome** فالقسم ديال **Extensions for New Profiles**.
+2. فـ Chrome اللي تحل، زيد الإضافات بحال ديما: من Chrome Web Store («Add to Chrome»)، ولا Developer mode ← Load unpacked. تقدر حتى تبدّل الإعدادات ديالهم.
+3. زيد بروفايل جديد: كيبدا بنفس الإضافات، بالإعدادات والبيانات ديالهم. (إلا كان Chrome ديال النموذج محلول، البرنامج كيسدّو قبل.)
+
+- الإضافات اللي جاو من Web Store كيتجددو بوحدهم فكل بروفايل. اللي جاو من dossier (Load unpacked) كيبقاو كيتقراو من نفس الـ dossier، فما تمسحوش.
+- البروفايلات اللي كانو قبل كيبقاو بالإضافات ديالهم.
+- **علاش النسخ**: Chrome ما كيخلي حتى برنامج يزيد إضافة لبروفايل بوحدو، وكيوقّع (signature) السجل ديال الإضافات ديال كل بروفايل. البرنامج كينسخ هاد السجل كيفما كتبو Chrome، فـ Chrome كيقبلو. ما كيتنسخوش الـ cookies، السجل (history)، كلمات السر، ولا البيانات ديال المواقع؛ والأرقام ديال البروفايل اللي ماشي موقّعين كيتحيدو، وChrome كيصاوب جداد.
+- **الحد**: البروفايلات اللي تصاوبو من النموذج كيتشاركو شي قيم مخبية ديال Chrome (بحال المفتاح اللي كيشفّر بيه البيانات ديال البروفايل)، والإضافة اللي كتعطي لراسها رقم كتبقى بنفس الرقم فكل بروفايل. المواقع ما كتشوفش هاد القيم.
+
 ## التثبيت
 
 من [Releases](https://github.com/kamaltv1010-boop/chromes/releases): `NoorChrome-Setup-<version>-windows-x64.exe` (installer) أو `NoorChrome-<version>-windows-x64-portable.exe`. خاص Google Chrome يكون منصّب؛ إلا ماكانش فالبلاصة العادية، اختارو من الإعدادات.
@@ -53,6 +66,7 @@ npm start            # يفتح البرنامج
 npm test             # الاختبارات
 NOOR_CHROME=/path/to/chrome xvfb-run -a node tools/smoke-chrome.js   # اختبار كامل مع Chromium
 npm run dist         # يبني .exe
+NOOR_CHROME=/path/to/chrome xvfb-run -a node tools/smoke-template.js /path/to/template   # اختبار كامل ديال الإضافات لكل بروفايل جديد
 node tools/build-extension.js --pack 1.0.0   # يبني dist/Noor-Edge-1.0.0.zip
 xvfb-run -a node tools/smoke-extension.js    # اختبار كامل ديال الإضافة فـ Chromium (Playwright)
 ```

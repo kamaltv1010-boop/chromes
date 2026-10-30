@@ -7,6 +7,7 @@ const { Fingerprint, KINDS } = require("./fingerprint");
 const { Timezone } = require("./timezone");
 const { ChromeInstance, findChrome } = require("./chrome");
 const { pageScript, workerScript } = require("./inject");
+const template = require("./template");
 
 let store = null;
 let profiles = null;
@@ -20,8 +21,13 @@ const opening = new Map();
 
 const chromePath = () => findChrome(store.get("chromePath", null));
 
+/// A profile by id, the template of new profiles' extensions included.
+const profileOf = (id) => (id === template.TEMPLATE_ID ? template.templateProfile() : profiles.find(id));
+const templateDir = () => profiles.dir(template.templateProfile());
+
 const state = () => ({
   profiles: profiles.all().map((p) => ({ ...p, running: instances.has(p.id), screen: fingerprint.screen(p), hardware: fingerprint.hardware(p), zone: p.proxy ? timezone.for(p.proxy) : null })),
+  template: { id: template.TEMPLATE_ID, running: instances.has(template.TEMPLATE_ID), extensions: template.installedExtensions(templateDir()) },
   protections: Object.fromEntries(KINDS.map((kind) => [kind, fingerprint.isEnabled(kind)])),
   blockTrackers: store.get("blockTrackers", true) !== false,
   timezoneFromIP: timezone.enabled(),
@@ -53,7 +59,7 @@ const scriptsFor = (profile) => {
 /// its pages as they load again.
 const refresh = (profile = null) => {
   for (const [id, instance] of instances) {
-    const owner = profile ? (id === profile.id ? profile : null) : profiles.find(id);
+    const owner = profile ? (id === profile.id ? profile : null) : profileOf(id);
     if (owner) {
       const { pageScript: page, workerScript: worker, screen: shown } = scriptsFor(owner);
       instance.setScripts(page, worker).then(() => instance.setScreen(shown)).catch(() => {});
@@ -103,6 +109,21 @@ const start = async (profile) => {
   return instance;
 };
 
+/// Once the process of Chrome open for a profile has ended, its files
+/// written (or after `ms`, if it doesn't).
+const exited = (instance, ms = 10000) => new Promise((resolve) => {
+  const child = instance.child;
+  if (!child || child.exitCode !== null || child.signalCode !== null) {
+    resolve();
+    return;
+  }
+  const timer = setTimeout(resolve, ms);
+  child.once("exit", () => {
+    clearTimeout(timer);
+    resolve();
+  });
+});
+
 const handle = (channel, handler) => {
   ipcMain.handle("noor:" + channel, async (event, ...args) => {
     const result = await handler(...args);
@@ -112,7 +133,21 @@ const handle = (channel, handler) => {
 
 const registerIPC = () => {
   handle("state", () => state());
-  handle("profiles:add", (name) => { profiles.add(name); });
+  handle("profiles:add", async (name) => {
+    // A new profile starts with the template's extensions, copied from it
+    // as its Chrome left them (closed first, so they are all written).
+    const templateChrome = instances.get(template.TEMPLATE_ID);
+    if (templateChrome && template.installedExtensions(templateDir()).length) {
+      await templateChrome.close();
+      await exited(templateChrome);
+    }
+    const profile = profiles.add(name);
+    try {
+      template.copyInto(templateDir(), profiles.dir(profile));
+    } catch (error) {
+      // It starts without them rather than not at all.
+    }
+  });
   handle("profiles:rename", (id, name) => { profiles.rename(id, name); });
   handle("profiles:proxy", (id, proxy) => { profiles.setProxy(id, proxy); });
   handle("profiles:remove", async (id) => {
@@ -145,7 +180,7 @@ const registerIPC = () => {
     }
   });
   handle("chrome:open", async (id) => {
-    const profile = profiles.find(id);
+    const profile = profileOf(id);
     if (!profile) {
       return;
     }
@@ -196,7 +231,7 @@ app.whenReady().then(async () => {
   timezone = new Timezone(store, { forced: process.env.NOOR_TEST_TIMEZONE || null });
   timezone.onChange(() => {
     for (const [id, instance] of instances) {
-      const profile = profiles.find(id);
+      const profile = profileOf(id);
       instance.setTimezone(timezone.for(profile ? profile.proxy : "")).catch(() => {});
     }
     push();
@@ -206,7 +241,7 @@ app.whenReady().then(async () => {
   // a profile using it is open.
   setInterval(() => {
     for (const id of instances.keys()) {
-      const profile = profiles.find(id);
+      const profile = profileOf(id);
       if (profile && profile.proxy) {
         timezone.refreshProxy(profile.proxy);
       }
@@ -231,7 +266,7 @@ app.whenReady().then(async () => {
   registerIPC();
 
   if (process.env.NOOR_TEST) {
-    global.noorTest = { store, profiles, fingerprint, timezone, instances, open, state };
+    global.noorTest = { store, profiles, fingerprint, timezone, instances, open, state, template, templateDir };
   }
 });
 

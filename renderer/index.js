@@ -92,6 +92,24 @@
     }
     $("newname").placeholder = `Profile ${settings.profiles.length + 1}`;
 
+    const template = $("template");
+    template.textContent = "";
+    const extensions = settings.template.extensions;
+    const controls = settings.template.running
+      ? button("Close", "secondary", () => noor.invoke("chrome:close", settings.template.id).then(apply))
+      : button("Open Chrome", "", () => noor.invoke("chrome:open", settings.template.id).then(apply));
+    template.append(row(
+      extensions.length ? `${extensions.length} extension${extensions.length === 1 ? "" : "s"}` : "No extensions yet",
+      settings.template.running ? "Open: add or remove extensions in its Chrome." : "New profiles get what is installed here.",
+      controls,
+    ));
+    for (const extension of extensions) {
+      const state = document.createElement("span");
+      state.className = "value";
+      state.textContent = [extension.version, extension.enabled ? "" : "off", extension.unpacked ? "unpacked" : ""].filter(Boolean).join(" · ");
+      template.append(row(extension.name, "", state));
+    }
+
     const chrome = $("chromestatus");
     chrome.className = settings.chromePath ? "status" : "status warn";
     chrome.textContent = settings.chromePath ? "" : "Google Chrome wasn't found on this PC. Install it, or choose chrome.exe in Settings.";
