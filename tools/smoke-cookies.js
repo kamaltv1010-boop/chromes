@@ -34,16 +34,22 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const steps = [];
   const step = (name, ok, detail) => { steps.push({ name, ok }); console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail === undefined ? "" : ": " + JSON.stringify(detail)}`); };
   const names = (answer) => (answer && answer.sites ? answer.sites.flatMap((s) => s.cookies.map((c) => `${s.site} ${c.name}${c.httpOnly ? " (HttpOnly)" : ""}`)).sort() : answer);
+  // The test site's cookies, and the others Chrome may have of its own (on
+  // Windows, with the internet: google.com's NID, from Chrome's own requests).
+  const ours = (answer) => (Array.isArray(names(answer)) ? names(answer).filter((n) => n.startsWith("127.0.0.1 ")) : names(answer));
+  const others = (answer) => (Array.isArray(names(answer)) ? names(answer).filter((n) => !n.startsWith("127.0.0.1 ")) : []);
 
   const [a, b] = await main(() => {
     const all = global.noorTest.profiles.all();
     const second = all.length > 1 ? all[1] : global.noorTest.profiles.add("B");
     return [all[0].id, second.id];
   });
-  // 1. A site sets two cookies in A's Chrome, which is then closed.
+  // 1. A site sets two cookies in A's Chrome, and another site (localhost)
+  // its own, kept as the first site's are deleted; then Chrome is closed.
   await main(async (e, [id, url]) => {
     const instance = await global.noorTest.open(global.noorTest.profiles.find(id));
     await instance.open(url);
+    await instance.open(url.replace("127.0.0.1", "localhost"));
     await new Promise((resolve) => setTimeout(resolve, 2500));
     await instance.close();
   }, [a, base]);
@@ -53,7 +59,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // 2. Listed with Chrome closed: started with no window, closed again.
   const listed = await invoke("cookies:list", a);
-  step("the window lists the site's two cookies (no value)", JSON.stringify(names(listed)) === JSON.stringify(["127.0.0.1 noor_a", "127.0.0.1 noor_b (HttpOnly)"]) && !JSON.stringify(listed).includes("two"), names(listed));
+  step("the window lists the site's two cookies (no value)", JSON.stringify(ours(listed)) === JSON.stringify(["127.0.0.1 noor_a", "127.0.0.1 noor_b (HttpOnly)"]) && !JSON.stringify(listed).includes("two"), names(listed));
   const after = await main((e, id) => ({ running: global.noorTest.instances.has(id), busy: global.noorTest.busy.has(id) }), a);
   step("Chrome started for the list is gone again", !after.running && !after.busy, after);
 
@@ -61,18 +67,18 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   await main((e, f) => { global.noorTest.nextFile = f; }, file);
   const exported = await invoke("cookies:export", a, "txt");
   const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-  step("exported to cookies.txt (HttpOnly kept)", exported.count === 2 && /\tnoor_a\t1$/m.test(text) && /^#HttpOnly_127\.0\.0\.1\t.*\tnoor_b\ttwo$/m.test(text), exported);
+  step("exported to cookies.txt (HttpOnly kept)", exported.count >= 2 && /\tnoor_a\t1$/m.test(text) && /^#HttpOnly_127\.0\.0\.1\t.*\tnoor_b\ttwo$/m.test(text), exported);
 
   // 4. The site's cookies deleted.
   const cleared = await invoke("cookies:clear", a, "127.0.0.1");
   const empty = await invoke("cookies:list", a);
-  step("the site's cookies deleted", cleared.count === 2 && empty.count === 0, { cleared, left: names(empty) });
+  step("the site's cookies deleted, and only theirs", cleared.count === 2 && ours(empty).length === 0 && others(listed).includes("localhost noor_a") && others(listed).every((n) => others(empty).includes(n)), { cleared, left: names(empty) });
 
   // 5. Imported back from the file.
   await main((e, f) => { global.noorTest.nextFile = f; }, file);
   const imported = await invoke("cookies:import", a);
   const back = await invoke("cookies:list", a);
-  step("imported back from the file", imported.count === 2 && JSON.stringify(names(back)) === JSON.stringify(names(listed)), { imported, back: names(back) });
+  step("imported back from the file", imported.count === exported.count && JSON.stringify(ours(back)) === JSON.stringify(ours(listed)) && others(listed).every((n) => others(back).includes(n)), { imported, back: names(back) });
 
   // 6. Profile B has none of them.
   const other = await invoke("cookies:list", b);
