@@ -36,6 +36,13 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
   const base = `http://127.0.0.1:${server.address().port}/`;
   // (A graphics card from the list: WebGL Vendor & Renderer.)
   const config = { seeds: { canvas: 1111, webGL: 2222, audio: null, clientRects: null }, screen: { width: 2560, height: 1440 }, hardware: { cores: 6, memory: 8 }, gpu: graphicsOf(GPUS[6]) };
+  // Fonts: one of this computer's hidden (Arial on Windows; Liberation
+  // Sans elsewhere), another left (the control: the page finds it), and one
+  // it lacks shown, drawn with the one left at 93% (see main/fonts.js).
+  const HIDDEN = process.platform === "win32" ? "Arial" : "Liberation Sans";
+  const KEPT = process.platform === "win32" ? "Times New Roman" : "Liberation Serif";
+  const ADDED = "Garamond";
+  config.fonts = { shadow: [HIDDEN], local: [HIDDEN.toLowerCase()], added: [{ name: ADDED, kind: "serif", standIn: KEPT, sizeAdjust: 93 }] };
   const instance = new ChromeInstance({
     executable,
     profile: { id: "smoke", name: "Smoke", proxy: "" },
@@ -72,10 +79,27 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
     const css = (query) => { document.getElementById("mq").textContent = "@media " + query + " { #probe { width: 7px !important } }"; const width = getComputedStyle(document.getElementById("probe")).width; document.getElementById("mq").textContent = ""; return width === "7px"; };
     const c = document.createElement("canvas"); c.width = 120; c.height = 40; const ctx = c.getContext("2d"); ctx.font = "16px Arial"; ctx.fillText("Noor ✓", 4, 24);
     const f = document.getElementById("f");
+    // Fonts: text in a font the page finds measures unlike the fallback's.
+    const widthIn = (win, family) => { const s = win.document.createElement("span"); s.style.cssText = "position:absolute;font-size:72px;white-space:nowrap"; s.style.fontFamily = family; s.textContent = "mmmmmmmmmmlli WwQq@"; win.document.body.appendChild(s); const w = s.offsetWidth; s.remove(); return w; };
+    const found = (win, name) => widthIn(win, '"' + name + '", monospace') !== widthIn(win, "monospace");
+    await document.fonts.ready;
+    const fontWorker = await new Promise((resolve) => {
+      const code = "const q = String.fromCharCode(34); const g = new OffscreenCanvas(10, 10).getContext('2d'); const w = (f) => { g.font = f; return g.measureText('mmmmmmmmmmlli WwQq@').width; }; const H = " + JSON.stringify(${JSON.stringify(HIDDEN)}) + "; const K = " + JSON.stringify(${JSON.stringify(KEPT)}) + "; const fam = (n) => '72px ' + q + n + q; postMessage({ hidden: w(fam(H) + ', monospace') !== w('72px monospace'), kept: w(fam(K) + ', monospace') !== w('72px monospace'), asked: (g.font = fam(H), g.font) });";
+      const w = new Worker(URL.createObjectURL(new Blob([code], { type: "text/javascript" })));
+      const timer = setTimeout(() => resolve("timeout"), 5000);
+      w.onmessage = (e) => { clearTimeout(timer); resolve(e.data); };
+      w.onerror = (e) => { clearTimeout(timer); resolve("error " + e.message); };
+    });
+    const fonts = {
+      hidden: found(window, ${JSON.stringify(HIDDEN)}), kept: found(window, ${JSON.stringify(KEPT)}), added: found(window, ${JSON.stringify(ADDED)}),
+      frameHidden: found(f.contentWindow, ${JSON.stringify(HIDDEN)}), frameAdded: found(f.contentWindow, ${JSON.stringify(ADDED)}),
+      listed: document.fonts.size, local: await new FontFace("x", "local(" + JSON.stringify(${JSON.stringify(HIDDEN)}) + ")").load().then(() => "loaded", (e) => e.name),
+      worker: fontWorker,
+    };
     // The graphics card WebGL names (WebGL Vendor & Renderer), in the page and a frame.
     const renderer = (win) => { const g = win.document.createElement("canvas").getContext("webgl"); const e = g && g.getExtension("WEBGL_debug_renderer_info"); return e ? g.getParameter(e.UNMASKED_VENDOR_WEBGL) + " | " + g.getParameter(e.UNMASKED_RENDERER_WEBGL) : "no webgl"; };
     return {
-      gpu: renderer(window), frameGpu: renderer(f.contentWindow),
+      gpu: renderer(window), frameGpu: renderer(f.contentWindow), fonts,
       title: document.title, screen: screen.width + "x" + screen.height, cores: navigator.hardwareConcurrency, memory: navigator.deviceMemory,
       zone: Intl.DateTimeFormat().resolvedOptions().timeZone, offset: new Date(2026, 0, 15).getTimezoneOffset(),
       webdriver: navigator.webdriver, toStr: Function.prototype.toString.call(Object.getOwnPropertyDescriptor(Screen.prototype, "width").get),
@@ -99,7 +123,14 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
     && page.stack.includes("valueOf") && !page.stack.includes(NAME)
     && page.nested === 6 && page.cssScreen === true && page.frameCanvas === true && page.oldMark === false
     && page.gpu === `${config.gpu.vendor} | ${config.gpu.renderer}` && page.frameGpu === page.gpu
-    && page.worker.gpu === config.gpu.renderer;
+    && page.worker.gpu === config.gpu.renderer
+    // Fonts: the hidden one isn't found, in the page, its frame and a
+    // worker, nor by local(); the one left is (the control); the added one
+    // is found; the page's own font list shows none of the faces made.
+    && page.fonts.hidden === false && page.fonts.kept === true && page.fonts.added === true
+    && page.fonts.frameHidden === false && page.fonts.frameAdded === true && page.fonts.listed === 0 && page.fonts.local === "NetworkError"
+    && page.fonts.worker && page.fonts.worker.hidden === false && page.fonts.worker.kept === true
+    && typeof page.fonts.worker.asked === "string" && page.fonts.worker.asked.includes(HIDDEN) && !/noor/i.test(page.fonts.worker.asked);
   await instance.close();
   server.close();
   console.log(ok ? "SMOKE OK" : "SMOKE FAILED");

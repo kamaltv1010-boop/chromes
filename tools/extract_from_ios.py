@@ -196,6 +196,9 @@ parts = [
     # WebGL Vendor & Renderer: a common PC's graphics card, not this one's
     # (main/gpus.js, the same list as Noor's).
     ("config.gpu", (Path(__file__).resolve().parent.parent / "scripts" / "parts" / "gpu.js").read_text(encoding="utf-8")),
+    # Fonts: Windows' own and the profile's own others, this PC's other
+    # fonts hidden (main/fonts.js; the same part as Noor's).
+    ("config.fonts", (Path(__file__).resolve().parent.parent / "scripts" / "parts" / "fonts.js").read_text(encoding="utf-8")),
 ]
 assert "\\#(" not in shared + helpers + frames, "unreplaced interpolation"
 

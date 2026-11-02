@@ -29,6 +29,7 @@
     clientRects: ["ClientRects", "Measured sizes of elements shift slightly. Off at first: on a PC these sizes are the same for everyone with the same Windows and fonts, so a shift would stand out."],
     screen: ["Screen Size", "Sites see another common PC screen."],
     hardware: ["Processor & Memory", "Sites see another common core count."],
+    fonts: ["Fonts", "Sites see the fonts every Windows has and a few others of the profile's own, not the rest of this PC's."],
   };
   let settings = null;
 
@@ -94,6 +95,8 @@
         `${profile.realScreen ? "this PC's screen " : ""}${profile.screen.width} × ${profile.screen.height}`,
         `${profile.realHardware ? "this PC's " : ""}${profile.hardware.cores} cores · ${profile.hardware.memory} GB`,
         profile.gpu ? profile.gpu : "this PC's graphics card",
+        // Its fonts beyond Windows' own (see main/fonts.js).
+        profile.fonts ? `fonts: Windows'${profile.fonts.groups.length ? " + " + profile.fonts.groups.join(", ") : ""}${profile.fonts.singles.length ? ` + ${profile.fonts.singles.length} more` : ""}` : "",
         profile.extensions ? `${profile.extensions} extension${profile.extensions === 1 ? "" : "s"}` : "",
         profile.proxy ? `proxy ${profile.proxy}` + (settings.timezoneFromIP ? ` · ${profile.zone || "time zone not found yet"}` : "") : "",
         profile.burner ? "deleted when Chrome closes" : "",

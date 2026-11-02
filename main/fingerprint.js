@@ -1,6 +1,22 @@
 "use strict";
 const crypto = require("crypto");
 const { GPUS, graphicsOf } = require("./gpus");
+const { pickFonts } = require("./fonts");
+
+/// What a page is given of a profile's fonts (see scripts/parts/fonts.js):
+/// the names of this PC's fonts it hides, and the fonts it shows that this
+/// PC lacks, each drawn with one of Windows' own; null if there is nothing
+/// to hide or draw.
+const fontsConfig = (fonts) => {
+  if (!fonts || !(fonts.shadow.length || fonts.added.length)) {
+    return null;
+  }
+  return {
+    shadow: fonts.shadow,
+    local: fonts.local,
+    added: fonts.added.map(({ name, kind, standIn, sizeAdjust }) => ({ name, kind, standIn, sizeAdjust })),
+  };
+};
 
 /// The protections, each with a seed per profile that decides the values
 /// pages see. The noise ones give canvas, WebGL and audio values and
@@ -8,8 +24,10 @@ const { GPUS, graphicsOf } = require("./gpus");
 /// "screen" and "hardware" show another common PC's screen size, core
 /// count and memory. Whether each is on is one setting for all profiles.
 /// "gpu" (WebGL Vendor & Renderer) shows a common PC's graphics card in
-/// place of this one's (see main/gpus.js).
-const KINDS = ["canvas", "webGL", "gpu", "audio", "clientRects", "screen", "hardware"];
+/// place of this one's (see main/gpus.js). "fonts" shows the fonts every
+/// Windows has and others of the profile's own, and hides this PC's other
+/// fonts (see main/fonts.js).
+const KINDS = ["canvas", "webGL", "gpu", "audio", "clientRects", "screen", "hardware", "fonts"];
 const NOISE_KINDS = ["canvas", "webGL", "audio", "clientRects"];
 
 /// Common PC screens, in CSS pixels.
@@ -39,6 +57,8 @@ class Fingerprint {
     /// tells pages, set at launch.
     this.realScreen = { width: 0, height: 0 };
     this.realHardware = { cores: 0, memory: 0 };
+    /// This PC's fonts (a FontList, see main/fonts.js), set at launch.
+    this.fontList = null;
   }
 
   enabledKey(kind) {
@@ -114,6 +134,12 @@ class Fingerprint {
     return this.pick(this.seed("gpu", profile), GPUS);
   }
 
+  /// What a profile shows of fonts (see fontsFor in main/fonts.js), or null
+  /// while this PC's fonts aren't known.
+  fonts(profile) {
+    return this.fontList ? this.fontList.forSeed(this.seed("fonts", profile)) : null;
+  }
+
   /// What a profile's pages see of the screen and hardware: the profile's,
   /// or this PC's own while that protection is off.
   shown(profile) {
@@ -125,6 +151,14 @@ class Fingerprint {
       realScreen: !screen,
       realHardware: !hardware,
       gpu: this.isEnabled("gpu") ? this.gpu(profile).name : null,
+      // Its fonts beyond Windows' own (groups and singles), how many of
+      // them are drawn (this PC lacks them), and how many of this PC's it
+      // hides; null while the protection is off or this PC's fonts aren't
+      // known yet.
+      fonts: (() => {
+        const fonts = this.isEnabled("fonts") ? this.fonts(profile) : null;
+        return fonts ? { groups: fonts.picked.groups, singles: fonts.picked.singles, drawn: fonts.added.length, hidden: fonts.families.length } : null;
+      })(),
     };
   }
 
@@ -139,6 +173,10 @@ class Fingerprint {
     if (kind === "gpu") {
       const gpu = this.pick(seed, GPUS);
       return `${gpu.name} ${gpu.id}`;
+    }
+    if (kind === "fonts") {
+      const picked = pickFonts(seed);
+      return picked.groups.concat(picked.singles).join(",");
     }
     return String(seed);
   }
@@ -169,6 +207,7 @@ class Fingerprint {
       screen: this.isEnabled("screen") ? this.screen(profile) : null,
       hardware: this.isEnabled("hardware") ? this.hardware(profile) : null,
       gpu: this.isEnabled("gpu") ? graphicsOf(this.gpu(profile)) : null,
+      fonts: this.isEnabled("fonts") ? fontsConfig(this.fonts(profile)) : null,
     };
   }
 }

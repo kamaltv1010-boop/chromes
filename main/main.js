@@ -11,11 +11,14 @@ const { ChromeInstance, findChrome } = require("./chrome");
 const { pageScript, workerScript } = require("./inject");
 const template = require("./template");
 const { toNetscape, toJSON, parseCookies, bySite, settable } = require("./cookies");
+const { FontList } = require("./fonts");
 
 let store = null;
 let profiles = null;
 let fingerprint = null;
 let timezone = null;
+/// This PC's fonts (see main/fonts.js), asked of the window's page.
+let fontList = null;
 let win = null;
 /// Chrome open per profile id, and opening (while a proxy's time zone is
 /// asked), so a profile opens once.
@@ -186,6 +189,12 @@ const start = async (profile) => {
   const executable = chromePath();
   if (!executable) {
     throw new Error("Google Chrome wasn't found. Choose chrome.exe in Settings.");
+  }
+  // The first run's first Chrome waits a moment for this PC's fonts (the
+  // fonts protection hides those a profile doesn't show); a list kept from
+  // an earlier run is there at once.
+  if (fontList && fingerprint.isEnabled("fonts")) {
+    await fontList.whenKnown(win && !win.isDestroyed() ? win.webContents : null);
   }
   const instance = new ChromeInstance({
     executable,
@@ -429,6 +438,13 @@ app.whenReady().then(async () => {
   const display = screen.getPrimaryDisplay();
   fingerprint.realScreen = { width: display.size.width, height: display.size.height };
   fingerprint.realHardware = { cores: os.cpus().length, memory: deviceMemory(os.totalmem()) };
+  // This PC's fonts, kept for the next run, asked again each run of the
+  // window's page (Chrome itself tells pages nothing of them); tests give
+  // theirs.
+  fontList = new FontList(path.join(userData, "fonts.json"), {
+    faces: process.env.NOOR_TEST && process.env.NOOR_TEST_FONTS ? JSON.parse(process.env.NOOR_TEST_FONTS) : null,
+  });
+  fingerprint.fontList = fontList;
   timezone = new Timezone(store, { forced: process.env.NOOR_TEST_TIMEZONE || null });
   timezone.onChange(() => {
     for (const [id, instance] of instances) {
@@ -470,11 +486,22 @@ app.whenReady().then(async () => {
     webPreferences: { preload: path.join(__dirname, "..", "renderer", "preload.js"), sandbox: true, contextIsolation: true },
   });
   win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
+  // Once the window shows, its page is asked for this PC's fonts; the
+  // profiles' Chrome open then gets them in its next pages.
+  win.once("ready-to-show", () => {
+    const known = fontList.answered;
+    fontList.refresh(win.webContents).then(() => {
+      if (!known && fontList.answered) {
+        refresh();
+      }
+      push();
+    });
+  });
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
   registerIPC();
 
   if (process.env.NOOR_TEST) {
-    global.noorTest = { store, profiles, fingerprint, timezone, instances, open, state, template, templateDir, busy, nextFile: null };
+    global.noorTest = { store, profiles, fingerprint, timezone, instances, open, state, template, templateDir, busy, fontList, nextFile: null };
   }
 });
 

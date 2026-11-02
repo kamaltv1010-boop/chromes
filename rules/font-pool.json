@@ -1,0 +1,87 @@
+{
+  "about": "The fonts a profile in Noor may have beyond Windows' own (rules/windows-fonts.json), as PCs with different programs and languages have different ones: each profile picks, from its own seed, the groups it has (each as often as 'share' says: Office on about half of PCs…) and up to 'most' single fonts, so each profile shows other fonts (see main/fonts.js). A font picked that this PC has is shown as it is; one it lacks is drawn with a font of Windows' own of the same kind ('standIns'), at a size of its own, so a site finds it. Each font is listed under its kind.",
+  "standIns": {
+    "sans": ["Arial", "Verdana", "Tahoma", "Segoe UI", "Calibri", "Trebuchet MS", "Corbel", "Candara"],
+    "serif": ["Times New Roman", "Georgia", "Cambria", "Constantia", "Palatino Linotype"],
+    "mono": ["Consolas", "Courier New", "Lucida Console"],
+    "script": ["Segoe Script", "Segoe Print", "Gabriola", "Comic Sans MS", "Ink Free", "MV Boli"],
+    "display": ["Impact", "Franklin Gothic Medium", "Arial Black", "Bahnschrift"],
+    "symbol": ["Segoe UI Symbol", "Wingdings", "Webdings", "Symbol"],
+    "arabic": ["Arial", "Tahoma", "Segoe UI", "Times New Roman"],
+    "cjk": ["MS Gothic", "SimSun", "Microsoft YaHei", "Malgun Gothic", "Yu Gothic", "Microsoft JhengHei"],
+    "thai": ["Leelawadee UI", "Tahoma"],
+    "hebrew": ["Arial", "Segoe UI", "Times New Roman", "Courier New"],
+    "indic": ["Nirmala UI", "Arial"]
+  },
+  "groups": [
+    {
+      "name": "Office",
+      "share": 0.5,
+      "fonts": {
+        "sans": ["Agency FB", "Arial Narrow", "Arial Rounded MT Bold", "Arial Unicode MS", "Berlin Sans FB", "Berlin Sans FB Demi", "Century Gothic", "Copperplate Gothic Bold", "Copperplate Gothic Light", "Eras Bold ITC", "Eras Demi ITC", "Eras Light ITC", "Eras Medium ITC", "Franklin Gothic Book", "Franklin Gothic Demi", "Franklin Gothic Demi Cond", "Franklin Gothic Heavy", "Franklin Gothic Medium Cond", "Gill Sans MT", "Gill Sans MT Condensed", "Gill Sans MT Ext Condensed Bold", "Gill Sans Ultra Bold", "Gill Sans Ultra Bold Condensed", "Gloucester MT Extra Condensed", "Lucida Sans", "Maiandra GD", "MS Reference Sans Serif", "Tw Cen MT", "Tw Cen MT Condensed", "Tw Cen MT Condensed Extra Bold"],
+        "serif": ["Baskerville Old Face", "Bell MT", "Bodoni MT", "Bodoni MT Black", "Bodoni MT Condensed", "Bodoni MT Poster Compressed", "Book Antiqua", "Bookman Old Style", "Californian FB", "Calisto MT", "Castellar", "Centaur", "Century", "Century Schoolbook", "Elephant", "Engravers MT", "Felix Titling", "Footlight MT Light", "Garamond", "Goudy Old Style", "High Tower Text", "Imprint MT Shadow", "Lucida Bright", "Lucida Fax", "Modern No. 20", "Perpetua", "Perpetua Titling MT", "Poor Richard", "Rockwell", "Rockwell Condensed", "Rockwell Extra Bold"],
+        "mono": ["Lucida Sans Typewriter", "OCR A Extended"],
+        "script": ["Blackadder ITC", "Bradley Hand ITC", "Brush Script MT", "Curlz MT", "Edwardian Script ITC", "Freestyle Script", "French Script MT", "Gigi", "Harlow Solid Italic", "Informal Roman", "Juice ITC", "Kristen ITC", "Kunstler Script", "Lucida Calligraphy", "Lucida Handwriting", "Matura MT Script Capitals", "Mistral", "Monotype Corsiva", "Old English Text MT", "Palace Script MT", "Papyrus", "Parchment", "Pristina", "Rage Italic", "Script MT Bold", "Tempus Sans ITC", "Viner Hand ITC", "Vivaldi", "Vladimir Script"],
+        "display": ["Algerian", "Bauhaus 93", "Bernard MT Condensed", "Britannic Bold", "Broadway", "Chiller", "Colonna MT", "Cooper Black", "Forte", "Goudy Stout", "Haettenschweiler", "Harrington", "Jokerman", "Magneto", "Niagara Engraved", "Niagara Solid", "Onyx", "Playbill", "Ravie", "Showcard Gothic", "Snap ITC", "Stencil", "Wide Latin"],
+        "symbol": ["Bookshelf Symbol 7", "MS Outlook", "MS Reference Specialty", "MT Extra", "Wingdings 2", "Wingdings 3"]
+      }
+    },
+    { "name": "Adobe Acrobat", "share": 0.3, "fonts": { "symbol": ["ZWAdobeF"] } },
+    {
+      "name": "Arabic (Windows)",
+      "share": 0.3,
+      "fonts": {
+        "arabic": ["Aldhabi", "Andalus", "Arabic Typesetting", "Microsoft Uighur", "Sakkal Majalla", "Simplified Arabic", "Traditional Arabic", "Urdu Typesetting"],
+        "mono": ["Simplified Arabic Fixed"]
+      }
+    },
+    {
+      "name": "Pan-European (Windows)",
+      "share": 0.06,
+      "fonts": {
+        "sans": ["Arial Nova", "Arial Nova Cond", "Gill Sans Nova", "Gill Sans Nova Cond", "Neue Haas Grotesk Text Pro", "Verdana Pro", "Verdana Pro Cond"],
+        "serif": ["Georgia Pro", "Georgia Pro Cond", "Rockwell Nova", "Rockwell Nova Cond"]
+      }
+    },
+    {
+      "name": "Japanese (Windows)",
+      "share": 0.04,
+      "fonts": { "cjk": ["BIZ UDGothic", "BIZ UDMincho", "BIZ UDPGothic", "BIZ UDPMincho", "Meiryo", "Meiryo UI", "MS Mincho", "MS PMincho", "UD Digi Kyokasho N-B", "UD Digi Kyokasho N-R", "UD Digi Kyokasho NK-B", "UD Digi Kyokasho NK-R", "UD Digi Kyokasho NP-B", "UD Digi Kyokasho NP-R", "Yu Mincho"] }
+    },
+    { "name": "Chinese (Windows)", "share": 0.05, "fonts": { "cjk": ["DengXian", "FangSong", "KaiTi", "SimHei", "DFKai-SB", "MingLiU", "MingLiU_HKSCS", "PMingLiU"] } },
+    { "name": "Korean (Windows)", "share": 0.03, "fonts": { "cjk": ["Batang", "BatangChe", "Dotum", "DotumChe", "Gulim", "GulimChe", "Gungsuh", "GungsuhChe"] } },
+    {
+      "name": "Thai (Windows)",
+      "share": 0.03,
+      "fonts": { "thai": ["Angsana New", "AngsanaUPC", "Browallia New", "BrowalliaUPC", "Cordia New", "CordiaUPC", "DilleniaUPC", "EucrosiaUPC", "FreesiaUPC", "IrisUPC", "JasmineUPC", "KodchiangUPC", "Leelawadee", "LilyUPC"] }
+    },
+    { "name": "Hebrew (Windows)", "share": 0.03, "fonts": { "hebrew": ["Aharoni", "David", "FrankRuehl", "Gisha", "Levenim MT", "Miriam", "Narkisim", "Rod"], "mono": ["Miriam Fixed"] } },
+    {
+      "name": "Indian (Windows)",
+      "share": 0.03,
+      "fonts": { "indic": ["Aparajita", "Gautami", "Iskoola Pota", "Kalinga", "Kartika", "Kokila", "Latha", "Mangal", "Raavi", "Sanskrit Text", "Shonar Bangla", "Shruti", "Tunga", "Utsaah", "Vani", "Vijaya", "Vrinda"] }
+    },
+    { "name": "Southeast Asian (Windows)", "share": 0.02, "fonts": { "sans": ["DaunPenh", "DokChampa", "Khmer UI", "Lao UI", "MoolBoran", "Euphemia", "Plantagenet Cherokee", "Nyala", "Estrangelo Edessa"] } },
+    {
+      "name": "LibreOffice",
+      "share": 0.06,
+      "fonts": {
+        "sans": ["Carlito", "DejaVu Sans", "Liberation Sans", "Liberation Sans Narrow", "Linux Biolinum G", "Noto Sans"],
+        "serif": ["Amiri", "Caladea", "DejaVu Serif", "Gentium Basic", "Gentium Book Basic", "Liberation Serif", "Linux Libertine Display G", "Linux Libertine G", "Noto Serif"],
+        "mono": ["DejaVu Sans Mono", "Liberation Mono", "Source Code Pro"],
+        "symbol": ["OpenSymbol"]
+      }
+    }
+  ],
+  "singles": {
+    "most": 4,
+    "fonts": {
+      "sans": ["Droid Sans", "Fira Sans", "Inter", "Lato", "Montserrat", "Nunito", "Open Sans", "Oswald", "Poppins", "PT Sans", "Raleway", "Roboto", "Source Sans Pro", "Ubuntu", "Work Sans"],
+      "serif": ["Droid Serif", "Lora", "Merriweather", "Playfair Display", "PT Serif"],
+      "mono": ["Droid Sans Mono", "Fira Code", "Hack", "Inconsolata", "JetBrains Mono", "Ubuntu Mono"],
+      "arabic": ["Almarai", "Cairo", "Noto Kufi Arabic", "Noto Naskh Arabic", "Tajawal"],
+      "display": ["Bebas Neue"],
+      "script": ["Dancing Script", "Pacifico"]
+    }
+  }
+}

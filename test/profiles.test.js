@@ -61,7 +61,7 @@ test("config: noise seeds for what is on (audio and ClientRects off at first), a
   assert.equal(config.hardware.memory, 8);
   fingerprint.setEnabled("screen", false);
   assert.equal(fingerprint.config(a).screen, null);
-  assert.deepEqual(KINDS, ["canvas", "webGL", "gpu", "audio", "clientRects", "screen", "hardware"]);
+  assert.deepEqual(KINDS, ["canvas", "webGL", "gpu", "audio", "clientRects", "screen", "hardware", "fonts"]);
 });
 
 test("WebGL Vendor & Renderer: a common PC's card, as Chrome on Windows names it, its own for each profile; off, none", () => {
@@ -81,6 +81,34 @@ test("WebGL Vendor & Renderer: a common PC's card, as Chrome on Windows names it
   assert.equal(fingerprint.shown(a).gpu, null);
 });
 
+test("Fonts: Windows' own and the profile's own others shown, this PC's other fonts hidden; New picks others; off, none", () => {
+  const { FontList } = require("../main/fonts");
+  const { profiles, fingerprint } = make();
+  const a = profiles.add("A");
+  // Before this PC's fonts are known, pages get none of it.
+  assert.equal(fingerprint.config(a).fonts, null);
+  assert.equal(fingerprint.shown(a).fonts, null);
+  // This PC: Windows' own, and a font of another program's.
+  fingerprint.fontList = new FontList(null, { faces: [["Arial", "Arial", "ArialMT", "Regular"], ["Segoe UI", "Segoe UI", "SegoeUI", "Regular"], ["Inconsolata", "Inconsolata Regular", "Inconsolata-Regular", "Regular"]] });
+  const { fonts } = fingerprint.config(a);
+  assert.ok(fonts.shadow.includes("Inconsolata"), "a font of this PC's no Windows has is hidden");
+  assert.ok(!fonts.shadow.includes("Arial") && !fonts.shadow.includes("Segoe UI"), "Windows' own are kept");
+  assert.ok(fonts.local.includes("inconsolata-regular"), "and local() finds it by none of its names");
+  for (const font of fonts.added) {
+    assert.deepEqual(Object.keys(font).sort(), ["kind", "name", "sizeAdjust", "standIn"]);
+  }
+  const shown = fingerprint.shown(a).fonts;
+  assert.deepEqual(Object.keys(shown).sort(), ["drawn", "groups", "hidden", "singles"]);
+  assert.equal(shown.hidden, 1);
+  // New gives other picks.
+  const before = fingerprint.visibleValue(fingerprint.seed("fonts", a), "fonts");
+  fingerprint.newSeed("fonts", a);
+  assert.notEqual(fingerprint.visibleValue(fingerprint.seed("fonts", a), "fonts"), before);
+  fingerprint.setEnabled("fonts", false);
+  assert.equal(fingerprint.config(a).fonts, null);
+  assert.equal(fingerprint.shown(a).fonts, null);
+});
+
 test("with screen or hardware protection off, a profile shows this PC's own, as its pages see them", () => {
   const { profiles, fingerprint } = make();
   fingerprint.realHardware = { cores: 4, memory: 8 };
@@ -91,7 +119,7 @@ test("with screen or hardware protection off, a profile shows this PC's own, as 
   assert.equal(on.realScreen || on.realHardware, false);
   fingerprint.setEnabled("screen", false);
   fingerprint.setEnabled("hardware", false);
-  assert.deepEqual(fingerprint.shown(a), { screen: { width: 1280, height: 800 }, hardware: { cores: 4, memory: 8 }, realScreen: true, realHardware: true, gpu: fingerprint.gpu(a).name });
+  assert.deepEqual(fingerprint.shown(a), { screen: { width: 1280, height: 800 }, hardware: { cores: 4, memory: 8 }, realScreen: true, realHardware: true, gpu: fingerprint.gpu(a).name, fonts: null });
 });
 
 test("this PC's memory as Chrome tells pages: the nearest power of two, from 0.25 to 8 GB", () => {

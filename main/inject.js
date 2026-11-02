@@ -74,7 +74,9 @@ const host = (() => {
   try { return window.location.hostname; } catch (e) { return ""; }
 })();
 const realDevice = SIGN_IN.some((site) => host === site || host.endsWith("." + site));
-const given = { seeds: config.seeds, screen: realDevice ? null : config.screen, hardware: realDevice ? null : config.hardware, gpu: config.gpu || null, key: KEY };
+// (The profile's fonts on sign-in sites too: they are this profile's, as
+// on any site, and a sign-in site that saw this PC's would see them change.)
+const given = { seeds: config.seeds, screen: realDevice ? null : config.screen, hardware: realDevice ? null : config.hardware, gpu: config.gpu || null, fonts: config.fonts || null, key: KEY };
 
 const hiddenProtect = () => {
   let frame = null;
@@ -144,7 +146,7 @@ const hostOfWorker = (url) => {
 const workerScript = (config, url, hidden = false) => {
   const host = hostOfWorker(url);
   const realDevice = SIGN_IN_SITES.some((site) => host === site || host.endsWith("." + site));
-  const given = { seeds: config.seeds, screen: realDevice ? null : config.screen, hardware: realDevice ? null : config.hardware, gpu: config.gpu || null, host };
+  const given = { seeds: config.seeds, screen: realDevice ? null : config.screen, hardware: realDevice ? null : config.hardware, gpu: config.gpu || null, fonts: config.fonts || null, host };
   if (hidden) {
     given.framesHidden = true;
   }
