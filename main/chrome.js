@@ -120,6 +120,11 @@ const setWebRTCPolicy = (dir, policy) => {
 /// before it is ended.
 const QUIT_WAIT = 15000;
 
+/// Whether the page script runs at once in the document a page or frame
+/// at `url` has as it is reached: only a site's, or an empty one (about:
+/// blank, srcdoc) a site may reach (see setUpPage).
+const runsAtOnce = (url) => /^(https?|file|data|blob):/i.test(String(url || "")) || /^about:(blank|srcdoc)$/i.test(String(url || ""));
+
 class ChromeInstance extends EventEmitter {
   constructor({ executable, profile, dir, pageScript, workerScript, screen = null, timezone = null, blockTrackers = true, extraArgs = [] }) {
     super();
@@ -308,10 +313,15 @@ class ChromeInstance extends EventEmitter {
   setUpPage(sessionId, info) {
     this.pages.set(sessionId, info);
     const sent = [
-      // Every document from now on, and the one there now: in a page held
-      // as it opens, that one's scripts wait for it. (A page that was open
-      // before has run its own: it is loaded again, see attached.)
-      this.send("Page.addScriptToEvaluateOnNewDocument", { source: this.pageScript, runImmediately: true }, sessionId).then((added) => {
+      // Every document from now on, and the one there now where a site's
+      // page is (or an empty page a site opened, which it can reach): in a
+      // page held as it opens, that one's scripts wait for it. (A page that
+      // was open before has run its own: it is loaded again, see attached.)
+      // Never at once in Chrome's own pages (its new tab page, extensions'),
+      // nor in a frame with no address yet: run in them as Chrome made
+      // them, it ended at once as it started (0x80000003, 4 starts in 6 on
+      // a Windows with no graphics card). Their next documents get it.
+      this.send("Page.addScriptToEvaluateOnNewDocument", { source: this.pageScript, runImmediately: runsAtOnce(info.url) }, sessionId).then((added) => {
         if (added && added.identifier) {
           this.scripts.set(sessionId, added.identifier);
         }
@@ -516,4 +526,4 @@ class ChromeInstance extends EventEmitter {
   }
 }
 
-module.exports = { ChromeInstance, findChrome, chromePaths, browserAddress, freePort, setWebRTCPolicy, webRTCPolicy };
+module.exports = { ChromeInstance, findChrome, chromePaths, browserAddress, freePort, setWebRTCPolicy, webRTCPolicy, runsAtOnce };

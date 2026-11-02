@@ -58,3 +58,23 @@ test("a worker's own workers are held for the protection too", async () => {
   const attach = sent.filter((c) => c.method === "Target.setAutoAttach");
   assert.deepEqual(attach.map((c) => [c.sessionId, c.params.waitForDebuggerOnStart]), [["w1", true]]);
 });
+
+test("the page script runs at once in a site's page or an empty page a site opened, never in Chrome's own pages", async () => {
+  const { instance, sent } = recorded({});
+  const pages = [
+    ["p1", "page", "https://site.example/"],
+    ["p2", "page", "about:blank"],
+    ["p3", "iframe", "about:srcdoc"],
+    ["p4", "page", "chrome://newtab/"],
+    ["p5", "background_page", "chrome-extension://nkeimhogjdpnpccoofpliimaahmaaom/background.html"],
+    ["p6", "iframe", ""],
+    ["p7", "page", "chrome-untrusted://new-tab-page/one-google-bar"],
+  ];
+  for (const [sessionId, type, url] of pages) {
+    await instance.setUpPage(sessionId, { type, url, targetId: sessionId });
+  }
+  const added = sent.filter((c) => c.method === "Page.addScriptToEvaluateOnNewDocument");
+  // Every one gets it for its next documents (a new tab page's next one may be a site's).
+  assert.deepEqual(added.map((c) => c.sessionId), pages.map(([sessionId]) => sessionId));
+  assert.deepEqual(added.map((c) => c.params.runImmediately), [true, true, true, false, false, false, false]);
+});

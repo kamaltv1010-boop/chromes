@@ -119,9 +119,12 @@ const open = (profile) => {
 };
 
 /// Runs `task(instance)` with Chrome for `profile`: its Chrome if open,
-/// else Chrome started for this alone, with no window (headless), and
-/// closed again after. Chrome alone reads a profile's cookies: it keeps
-/// them on the disk encrypted with a key of its own.
+/// else Chrome started for this alone, with no window, and closed again
+/// after. Chrome alone reads a profile's cookies: it keeps them on the disk
+/// encrypted with a key of its own. Chrome as it always runs, with no
+/// window opened (--no-startup-window), not headless Chrome: closed,
+/// headless Chrome left a change (cookies deleted or imported) unwritten
+/// most times (9 in 10), and the cookies came back.
 const withChrome = async (profile, task) => {
   if (instances.has(profile.id) || opening.has(profile.id)) {
     return task(await open(profile));
@@ -139,7 +142,7 @@ const withChrome = async (profile, task) => {
     dir: profiles.dir(profile),
     ...scriptsFor(profile),
     blockTrackers: false,
-    extraArgs: ["--headless=new", ...(process.env.NOOR_CHROME_ARGS || "").split(" ").filter(Boolean)],
+    extraArgs: ["--no-startup-window", ...(process.env.NOOR_CHROME_ARGS || "").split(" ").filter(Boolean)],
   });
   const job = (async () => {
     await quiet.start();
