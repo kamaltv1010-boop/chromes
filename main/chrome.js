@@ -116,6 +116,10 @@ const setWebRTCPolicy = (dir, policy) => {
 /// and every page and worker it makes, held as it starts, given the
 /// protection and the profile's screen, time zone and blocked trackers,
 /// then let go. Nothing of it marks the browser as automated.
+/// How long Chrome asked to close is given to quit (writing its files)
+/// before it is ended.
+const QUIT_WAIT = 15000;
+
 class ChromeInstance extends EventEmitter {
   constructor({ executable, profile, dir, pageScript, workerScript, screen = null, timezone = null, blockTrackers = true, extraArgs = [] }) {
     super();
@@ -140,6 +144,8 @@ class ChromeInstance extends EventEmitter {
     /// Each page's session once it is set up, by its target's id (see open).
     this.ready = new Map();
     this.closed = false;
+    /// Set as Noor asks Chrome to close (see close and ended).
+    this.closing = false;
   }
 
   args() {
@@ -198,7 +204,10 @@ class ChromeInstance extends EventEmitter {
   }
 
   /// Chrome is gone, or its connection: once. Chrome without the
-  /// connection would open pages without the protection, so it is closed.
+  /// connection would open pages without the protection, so it is closed:
+  /// at once if the connection went by itself, but given time to quit if
+  /// Noor asked it to (see close), as Chrome writes what changed (cookies,
+  /// history) to the disk as it quits, after its connection has gone.
   ended() {
     if (this.closed) {
       return;
@@ -207,8 +216,14 @@ class ChromeInstance extends EventEmitter {
     if (this.connection) {
       this.connection.close();
     }
-    if (this.child && this.child.exitCode === null && this.child.signalCode === null) {
-      try { this.child.kill(); } catch (error) {}
+    const child = this.child;
+    if (child && child.exitCode === null && child.signalCode === null) {
+      if (this.closing) {
+        const timer = setTimeout(() => { try { child.kill(); } catch (error) {} }, QUIT_WAIT);
+        child.once("exit", () => clearTimeout(timer));
+      } else {
+        try { child.kill(); } catch (error) {}
+      }
     }
     this.emit("exit");
   }
@@ -462,16 +477,25 @@ class ChromeInstance extends EventEmitter {
     return created;
   }
 
-  /// Asks Chrome to close, and ends it if it doesn't.
+  /// Asks Chrome to close, and waits for it to quit (it writes what
+  /// changed to the disk first); ends it if it hasn't after QUIT_WAIT.
   async close() {
-    if (this.closed) {
+    const child = this.child;
+    if (this.closed && (!child || child.exitCode !== null || child.signalCode !== null)) {
       return;
     }
+    this.closing = true;
     await this.send("Browser.close", {});
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    if (!this.closed && this.child) {
-      try { this.child.kill(); } catch (error) {}
+    if (child && child.exitCode === null && child.signalCode === null) {
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, QUIT_WAIT);
+        child.once("exit", () => { clearTimeout(timer); resolve(); });
+      });
     }
+    if (child && child.exitCode === null && child.signalCode === null) {
+      try { child.kill(); } catch (error) {}
+    }
+    this.ended();
   }
 }
 

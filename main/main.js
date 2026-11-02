@@ -1,4 +1,5 @@
 "use strict";
+const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { app, BrowserWindow, ipcMain, dialog, screen, shell } = require("electron");
@@ -9,6 +10,7 @@ const { Timezone } = require("./timezone");
 const { ChromeInstance, findChrome } = require("./chrome");
 const { pageScript, workerScript } = require("./inject");
 const template = require("./template");
+const { toNetscape, toJSON, parseCookies, bySite, settable } = require("./cookies");
 
 let store = null;
 let profiles = null;
@@ -19,12 +21,40 @@ let win = null;
 /// asked), so a profile opens once.
 const instances = new Map();
 const opening = new Map();
+/// Chrome started for a profile's cookies alone (see withChrome), with no
+/// window: opening that profile waits for it to be closed again, as one
+/// folder takes one Chrome at a time.
+const busy = new Map();
 
 const chromePath = () => findChrome(store.get("chromePath", null));
 
 /// A profile by id, the template of new profiles' extensions included.
 const profileOf = (id) => (id === template.TEMPLATE_ID ? template.templateProfile() : profiles.find(id));
 const templateDir = () => profiles.dir(template.templateProfile());
+/// The file a Save or Open dialog gives, or what a test set for it
+/// (NOOR_TEST: global.noorTest.nextFile, used once).
+const chooseFile = async (save, options) => {
+  if (process.env.NOOR_TEST && global.noorTest && global.noorTest.nextFile) {
+    const file = global.noorTest.nextFile;
+    global.noorTest.nextFile = null;
+    return file;
+  }
+  if (save) {
+    const { canceled, filePath } = await dialog.showSaveDialog(win, options);
+    return canceled ? null : filePath || null;
+  }
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, options);
+  return canceled ? null : filePaths[0] || null;
+};
+
+/// A profile by id (the template's too), or an error the window shows.
+const profilesFind = (id) => {
+  const profile = profileOf(id);
+  if (!profile) {
+    throw new Error("This profile is gone");
+  }
+  return profile;
+};
 
 const state = () => ({
   // What each profile's pages see (this PC's screen and hardware while
@@ -77,10 +107,72 @@ const open = (profile) => {
     return Promise.resolve(instances.get(profile.id));
   }
   if (!opening.has(profile.id)) {
-    opening.set(profile.id, start(profile).finally(() => opening.delete(profile.id)));
+    const before = busy.get(profile.id) || Promise.resolve();
+    opening.set(profile.id, before.catch(() => {}).then(() => start(profile)).finally(() => opening.delete(profile.id)));
   }
   return opening.get(profile.id);
 };
+
+/// Runs `task(instance)` with Chrome for `profile`: its Chrome if open,
+/// else Chrome started for this alone, with no window (headless), and
+/// closed again after. Chrome alone reads a profile's cookies: it keeps
+/// them on the disk encrypted with a key of its own.
+const withChrome = async (profile, task) => {
+  if (instances.has(profile.id) || opening.has(profile.id)) {
+    return task(await open(profile));
+  }
+  while (busy.has(profile.id)) {
+    await busy.get(profile.id).catch(() => {});
+  }
+  const executable = chromePath();
+  if (!executable) {
+    throw new Error("Google Chrome wasn't found. Choose chrome.exe in Settings.");
+  }
+  const quiet = new ChromeInstance({
+    executable,
+    profile,
+    dir: profiles.dir(profile),
+    ...scriptsFor(profile),
+    blockTrackers: false,
+    extraArgs: ["--headless=new", ...(process.env.NOOR_CHROME_ARGS || "").split(" ").filter(Boolean)],
+  });
+  const job = (async () => {
+    await quiet.start();
+    try {
+      return await task(quiet);
+    } finally {
+      await quiet.close();
+      await exited(quiet);
+    }
+  })();
+  const done = job.then(() => {}, () => {});
+  busy.set(profile.id, done);
+  done.then(() => { if (busy.get(profile.id) === done) busy.delete(profile.id); });
+  return job;
+};
+
+/// A profile's cookies, as its Chrome has them (Storage.getCookies, on the
+/// browser: every site's, partitioned ones too).
+const cookiesOf = async (instance) => {
+  const answer = await instance.connection.send("Storage.getCookies", {});
+  return Array.isArray(answer && answer.cookies) ? answer.cookies : [];
+};
+
+/// Sets `cookies` in a profile's Chrome, a few hundred at a time; the
+/// count Chrome took.
+const setCookies = async (instance, cookies) => {
+  let count = 0;
+  for (let i = 0; i < cookies.length; i += 200) {
+    const batch = cookies.slice(i, i + 200);
+    await instance.connection.send("Storage.setCookies", { cookies: batch });
+    count += batch.length;
+  }
+  return count;
+};
+
+/// Whether a cookie belongs to `site` (the site as the window lists it:
+/// the domain without its leading dot).
+const ofSite = (cookie, site) => String(cookie.domain || "").replace(/^\./, "") === site;
 
 const start = async (profile) => {
   const executable = chromePath();
@@ -206,6 +298,63 @@ const registerIPC = () => {
       await instance.close();
     }
   });
+  handle("cookies:list", async (id) => {
+    const profile = profilesFind(id);
+    const cookies = await withChrome(profile, cookiesOf);
+    return { count: cookies.length, sites: bySite(cookies) };
+  });
+  handle("cookies:export", async (id, format) => {
+    const profile = profilesFind(id);
+    const json = format === "json";
+    const filePath = await chooseFile(true, {
+      title: `Export the cookies of ${profile.name}`,
+      defaultPath: path.join(app.getPath("downloads"), `${profile.name.replace(/[\\/:*?"<>|]+/g, "-")} cookies.${json ? "json" : "txt"}`),
+      filters: json ? [{ name: "JSON", extensions: ["json"] }] : [{ name: "cookies.txt", extensions: ["txt"] }],
+    });
+    if (!filePath) {
+      return { canceled: true };
+    }
+    const cookies = await withChrome(profile, cookiesOf);
+    fs.writeFileSync(filePath, json ? toJSON(cookies) : toNetscape(cookies));
+    return { count: cookies.length, file: filePath };
+  });
+  handle("cookies:import", async (id) => {
+    const profile = profilesFind(id);
+    const file = await chooseFile(false, {
+      title: `Import cookies into ${profile.name}`,
+      filters: [{ name: "Cookies (cookies.txt, JSON)", extensions: ["txt", "json"] }],
+      properties: ["openFile"],
+    });
+    if (!file) {
+      return { canceled: true };
+    }
+    if (fs.statSync(file).size > 32 * 1024 * 1024) {
+      throw new Error("This file is too big for a cookies file");
+    }
+    const cookies = parseCookies(fs.readFileSync(file, "utf8"));
+    if (!cookies.length) {
+      throw new Error("No cookies were found in this file");
+    }
+    const count = await withChrome(profile, (instance) => setCookies(instance, cookies));
+    return { count };
+  });
+  handle("cookies:clear", async (id, site) => {
+    const profile = profilesFind(id);
+    return withChrome(profile, async (instance) => {
+      const all = await cookiesOf(instance);
+      const gone = site ? all.filter((cookie) => ofSite(cookie, String(site))) : all;
+      if (!gone.length) {
+        return { count: 0 };
+      }
+      // Every cookie away, then those kept back (Chrome deletes no single
+      // cookie from its browser target).
+      await instance.connection.send("Storage.clearCookies", {});
+      if (site) {
+        await setCookies(instance, all.filter((cookie) => !ofSite(cookie, String(site))).map(settable).filter(Boolean));
+      }
+      return { count: gone.length };
+    });
+  });
   handle("chrome:choose", async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
       title: "Where is Google Chrome?",
@@ -284,7 +433,7 @@ app.whenReady().then(async () => {
   registerIPC();
 
   if (process.env.NOOR_TEST) {
-    global.noorTest = { store, profiles, fingerprint, timezone, instances, open, state, template, templateDir };
+    global.noorTest = { store, profiles, fingerprint, timezone, instances, open, state, template, templateDir, busy, nextFile: null };
   }
 });
 

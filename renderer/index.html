@@ -59,6 +59,19 @@
     <div class="row"><div class="label">Source code</div><div class="value"><a href="https://github.com/kamaltv1010-boop/chromes" id="source">github.com/kamaltv1010-boop/chromes</a></div></div>
   </div>
 </div>
+<dialog id="cookies">
+  <div class="toolbar"><h3 id="cookies-title" style="margin:0;flex:1"></h3><button class="x" id="cookies-close" title="Close">✕</button></div>
+  <p class="status" id="cookies-status"></p>
+  <div class="toolbar">
+    <button class="button small" id="cookies-export-txt">Export cookies.txt</button>
+    <button class="button small secondary" id="cookies-export-json">Export JSON</button>
+    <button class="button small secondary" id="cookies-import">Import…</button>
+    <button class="button small secondary danger" id="cookies-clear">Delete all</button>
+  </div>
+  <div class="toolbar"><input type="search" id="cookies-search" placeholder="Search sites and cookie names"></div>
+  <div class="list" id="cookies-list"></div>
+  <p class="footer">Cookies keep you signed in: a file of them signs in whoever has it. Chrome keeps them encrypted; Noor asks this profile's Chrome for them (opened with no window if it is closed).</p>
+</dialog>
 <script src="index.js"></script>
 </body>
 </html>

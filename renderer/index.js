@@ -91,6 +91,7 @@
       }
       controls.append(menuButton([
         ["New fingerprints", () => noor.invoke("fingerprint:new", profile.id).then(apply)],
+        ["Cookies…", () => cookies.show(profile)],
         ["Rename…", () => { const value = prompt("Profile name", profile.name); if (value !== null) noor.invoke("profiles:rename", profile.id, value).then(apply); }],
         ["Proxy…", () => { const value = prompt("Proxy, like socks5://host:1080 or http://host:8080 (empty for none)", profile.proxy || ""); if (value !== null) noor.invoke("profiles:proxy", profile.id, value).then(apply); }],
         ["Delete", () => noor.invoke("profiles:remove", profile.id).then(apply), "danger"],
@@ -142,6 +143,92 @@
       : "Pages see this PC's time zone. On, they see the one where your connection is (a VPN's, or a profile's proxy).";
     $("version").textContent = settings.version;
   };
+
+  // A profile's cookies: its sites and their cookies' names (no values: a
+  // cookie signs in), searched; exported, imported, deleted (a site's or
+  // all). Each asks the profile's Chrome (see withChrome in main.js).
+  const cookies = (() => {
+    const dialog = $("cookies");
+    let profile = null;
+    let sites = [];
+    const status = (text, warn) => { $("cookies-status").textContent = text; $("cookies-status").className = warn ? "status warn" : "status"; };
+    const when = (seconds) => (seconds ? new Date(seconds * 1000).toLocaleDateString() : "session");
+    const render = () => {
+      const list = $("cookies-list");
+      list.textContent = "";
+      const query = $("cookies-search").value.trim().toLowerCase();
+      const shown = sites.filter((s) => !query || s.site.includes(query) || s.cookies.some((c) => c.name.toLowerCase().includes(query)));
+      if (!shown.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = sites.length ? "No site or cookie matches." : "This profile has no cookies.";
+        list.append(empty);
+        return;
+      }
+      for (const site of shown) {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        const title = document.createElement("span");
+        title.className = "t";
+        title.textContent = `${site.site} · ${site.cookies.length} cookie${site.cookies.length === 1 ? "" : "s"}`;
+        const remove = document.createElement("button");
+        remove.className = "x";
+        remove.title = `Delete the cookies of ${site.site}`;
+        remove.textContent = "✕";
+        remove.addEventListener("click", (event) => { event.preventDefault(); act(() => noor.invoke("cookies:clear", profile.id, site.site), (r) => `Deleted ${r.count} cookie${r.count === 1 ? "" : "s"} of ${site.site}.`, true); });
+        summary.append(title, remove);
+        details.append(summary);
+        for (const cookie of site.cookies) {
+          const line = document.createElement("div");
+          line.className = "cookie";
+          line.textContent = [cookie.name, cookie.path, when(cookie.expires), cookie.secure ? "Secure" : "", cookie.httpOnly ? "HttpOnly" : "", cookie.sameSite].filter(Boolean).join(" · ");
+          details.append(line);
+        }
+        list.append(details);
+      }
+    };
+    const load = async () => {
+      status("Reading this profile's cookies…");
+      try {
+        const answer = await noor.invoke("cookies:list", profile.id);
+        sites = answer.sites;
+        status(`${answer.count} cookie${answer.count === 1 ? "" : "s"} of ${sites.length} site${sites.length === 1 ? "" : "s"}.`);
+      } catch (error) {
+        sites = [];
+        status(String(error.message || error).replace(/^Error invoking remote method '[^']+': (Error: )?/, ""), true);
+      }
+      render();
+    };
+    const act = async (call, said, reload) => {
+      try {
+        const answer = await call();
+        if (answer && answer.canceled) return;
+        status(said(answer));
+        if (reload) await load();
+      } catch (error) {
+        status(String(error.message || error).replace(/^Error invoking remote method '[^']+': (Error: )?/, ""), true);
+      }
+    };
+    $("cookies-close").addEventListener("click", () => dialog.close());
+    $("cookies-search").addEventListener("input", render);
+    $("cookies-export-txt").addEventListener("click", () => act(() => noor.invoke("cookies:export", profile.id, "txt"), (r) => `Exported ${r.count} cookies to ${r.file}.`));
+    $("cookies-export-json").addEventListener("click", () => act(() => noor.invoke("cookies:export", profile.id, "json"), (r) => `Exported ${r.count} cookies to ${r.file}.`));
+    $("cookies-import").addEventListener("click", () => act(() => noor.invoke("cookies:import", profile.id), (r) => `Imported ${r.count} cookie${r.count === 1 ? "" : "s"}.`, true));
+    $("cookies-clear").addEventListener("click", () => {
+      if (confirm(`Delete every cookie of ${profile.name}? Its sites will sign it out.`)) act(() => noor.invoke("cookies:clear", profile.id), (r) => `Deleted ${r.count} cookie${r.count === 1 ? "" : "s"}.`, true);
+    });
+    return {
+      show(which) {
+        profile = which;
+        sites = [];
+        $("cookies-title").textContent = `Cookies · ${which.name}`;
+        $("cookies-search").value = "";
+        render();
+        dialog.showModal();
+        load();
+      },
+    };
+  })();
 
   for (const box of document.querySelectorAll("input[data-setting]")) {
     box.addEventListener("change", () => noor.invoke("settings:set", box.dataset.setting, box.checked).then(apply));

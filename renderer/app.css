@@ -64,3 +64,12 @@ input:focus { border-color: var(--accent); }
 .toolbar input { flex: 1; }
 .empty { color: var(--muted); padding: 14px 0; }
 code { font-family: Consolas, monospace; font-size: 13px; }
+dialog#cookies { width: min(720px, 92vw); max-height: 86vh; border: 0; border-radius: 14px; padding: 18px 20px; background: var(--bg); color: var(--fg); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+dialog#cookies::backdrop { background: rgba(0, 0, 0, 0.35); }
+#cookies-list { max-height: 52vh; overflow: auto; }
+#cookies-list details { border-top: 1px solid var(--line); padding: 6px 0; }
+#cookies-list details:first-child { border-top: 0; }
+#cookies-list summary { cursor: pointer; display: flex; align-items: center; gap: 8px; }
+#cookies-list summary .t { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#cookies-list .cookie { color: var(--muted); font-size: 12px; padding: 3px 0 3px 18px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.danger { color: #c62828; }
