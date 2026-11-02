@@ -126,9 +126,11 @@ const QUIT_WAIT = 15000;
 const runsAtOnce = (url) => /^(https?|file|data|blob):/i.test(String(url || "")) || /^about:(blank|srcdoc)$/i.test(String(url || ""));
 
 class ChromeInstance extends EventEmitter {
-  constructor({ executable, profile, dir, pageScript, workerScript, screen = null, timezone = null, blockTrackers = true, extraArgs = [] }) {
+  constructor({ executable, profile, dir, pageScript, workerScript, screen = null, timezone = null, blockTrackers = true, extraArgs = [], startWait = START_WAIT }) {
     super();
     this.executable = executable;
+    /// How long Chrome has to open its debugging port (shorter in tests).
+    this.startWait = startWait;
     this.profile = profile;
     this.dir = dir;
     this.pageScript = pageScript;
@@ -175,17 +177,23 @@ class ChromeInstance extends EventEmitter {
   async start() {
     fs.mkdirSync(this.dir, { recursive: true });
     setWebRTCPolicy(this.dir, webRTCPolicy(this.profile.proxy));
-    this.port = await freePort();
-    const startedAt = Date.now();
-    this.child = spawn(this.executable, this.args(), { stdio: "ignore", windowsHide: false });
-    this.child.on("exit", (code, signal) => {
-      // (How it ended, said by open if a tab can't be opened.)
-      this.exitedWith = { code, signal, after: Date.now() - startedAt };
-      this.ended();
-    });
-    this.child.on("error", () => this.ended());
     try {
-      const address = await this.waitForAddress();
+      // Chrome that runs but never opens the port it was given (another
+      // program took the port in between, or Chrome hung as it started:
+      // once on Windows in CI) is ended and started once more, on another.
+      let address = null;
+      for (let attempt = 1; !address; attempt++) {
+        this.port = await freePort();
+        this.spawnChrome();
+        try {
+          address = await this.waitForAddress();
+        } catch (error) {
+          if (!error.noPort || attempt >= 2) {
+            throw error;
+          }
+          await this.giveUp();
+        }
+      }
       this.connection = await Connection.open(address);
       this.connection.on("event", (event) => this.onEvent(event));
       this.connection.on("close", () => this.ended());
@@ -197,9 +205,45 @@ class ChromeInstance extends EventEmitter {
     }
   }
 
+  /// Starts Chrome's process, ended with this instance (see ended), but
+  /// one given up on (see start, giveUp).
+  spawnChrome() {
+    const startedAt = Date.now();
+    const child = spawn(this.executable, this.args(), { stdio: "ignore", windowsHide: false });
+    this.child = child;
+    child.on("exit", (code, signal) => {
+      if (child !== this.child) {
+        return;
+      }
+      // (How it ended, said by open if a tab can't be opened.)
+      this.exitedWith = { code, signal, after: Date.now() - startedAt };
+      this.ended();
+    });
+    child.on("error", () => {
+      if (child === this.child) {
+        this.ended();
+      }
+    });
+  }
+
+  /// Ends a Chrome whose debugging port never answered, and waits for it to
+  /// be gone (5 s at most), with this instance going on (see start).
+  async giveUp() {
+    const child = this.child;
+    this.child = null;
+    if (child && child.exitCode === null && child.signalCode === null) {
+      const gone = new Promise((resolve) => {
+        const timer = setTimeout(resolve, 5000);
+        child.once("exit", () => { clearTimeout(timer); resolve(); });
+      });
+      try { child.kill(); } catch (error) {}
+      await gone;
+    }
+  }
+
   /// Chrome's address, once its debugging port answers.
   async waitForAddress() {
-    const until = Date.now() + START_WAIT;
+    const until = Date.now() + this.startWait;
     while (!this.closed && Date.now() < until) {
       const address = browserAddress(await askVersion(this.port), this.port);
       if (address) {
@@ -207,10 +251,17 @@ class ChromeInstance extends EventEmitter {
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    if (!this.closed && this.child) {
-      try { this.child.kill(); } catch (error) {}
+    if (this.closed) {
+      throw new Error("Chrome closed as it started (is this profile open in another Chrome?)");
     }
-    throw new Error(this.closed ? "Chrome closed as it started (is this profile open in another Chrome?)" : "Chrome didn't open its debugging port");
+    // Whether Chrome said it listens (it writes the port it listens on there).
+    let said = "it wrote no DevToolsActivePort";
+    try {
+      said = "its DevToolsActivePort: " + fs.readFileSync(path.join(this.dir, "DevToolsActivePort"), "utf8").split(/\r?\n/)[0];
+    } catch (error) {}
+    const error = new Error(`Chrome didn't open its debugging port (${this.port}) in ${this.startWait / 1000} s; ${said}`);
+    error.noPort = true;
+    throw error;
   }
 
   /// Chrome is gone, or its connection: once. Chrome without the

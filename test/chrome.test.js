@@ -78,3 +78,22 @@ test("the page script runs at once in a site's page or an empty page a site open
   assert.deepEqual(added.map((c) => c.sessionId), pages.map(([sessionId]) => sessionId));
   assert.deepEqual(added.map((c) => c.params.runImmediately), [true, true, true, false, false, false, false]);
 });
+
+test("Chrome that never opens its debugging port is ended and started once more on another port, then given up on with why", { skip: process.platform === "win32" }, async () => {
+  // A "Chrome" that runs and opens nothing, and notes each start and its port.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "noor-chrome-noport-"));
+  const starts = path.join(dir, "starts");
+  const fake = path.join(dir, "chrome");
+  fs.writeFileSync(fake, `#!/bin/sh\nfor a in "$@"; do case "$a" in --remote-debugging-port=*) echo "$a" >> "${starts}";; esac; done\nexec sleep 30\n`, { mode: 0o755 });
+  const instance = new ChromeInstance({ executable: fake, profile: { id: "p", proxy: "" }, dir: path.join(dir, "profile"), pageScript: "", workerScript: () => null, startWait: 1500 });
+  let exits = 0;
+  instance.on("exit", () => { exits++; });
+  await assert.rejects(instance.start(), (error) => /didn't open its debugging port \(\d+\) in 1\.5 s; it wrote no DevToolsActivePort/.test(error.message));
+  const ports = fs.readFileSync(starts, "utf8").trim().split("\n");
+  assert.equal(ports.length, 2, "started twice");
+  assert.notEqual(ports[0], ports[1], "on another port the second time");
+  // Ended once, both processes gone.
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(exits, 1);
+  assert.equal(instance.closed, true);
+});
