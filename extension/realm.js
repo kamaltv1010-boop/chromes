@@ -217,6 +217,9 @@ const protectPage = (window, config) => {
         originals: new WeakMap(),
         // The windows protected, each once.
         protectedWindows: new WeakSet(),
+        // For a window protected while empty, what brings it up to the
+        // document it has now (see eachDocument in protect).
+        documentSyncs: new WeakMap(),
         // The audio buffers the browser rendered or decoded, from any
         // window, and the channels of them already changed.
         rendered: new WeakSet(),
@@ -233,7 +236,7 @@ const protectPage = (window, config) => {
         marks: new WeakMap(),
       };
     })();
-    const { originals, protectedWindows, rendered, nudged, kinds, painted, clipped, marks } = shared;
+    const { originals, protectedWindows, documentSyncs, rendered, nudged, kinds, painted, clipped, marks } = shared;
 
     // Integer hash, so a given pixel or sample always gets the same tweak.
     const mix = (n) => {
@@ -360,6 +363,44 @@ const protect = (window) => {
     // that fails is tried again.
     const document = window.document;
 
+    // A window protected while empty (about:blank) keeps its place, and all
+    // that was put in it, for a page of the same site it loads next: the
+    // browser keeps such a window for that page and gives it only a
+    // document of its own (Chromium then runs nothing there before the
+    // page's own scripts; a copy of this script run there again finds the
+    // window protected, and leaves it). What this script makes for a document (faces
+    // in its font list, a listener, an observer) is made through
+    // eachDocument: for the window's document now, and again for each one
+    // the window gets later, as soon as this script finds it there, which
+    // is when the page (or the page around the frame) reaches anything
+    // replaced here.
+    const documentTasks = [];
+    let documentNow = document;
+    // Only a window empty now gets another document. (A worker has none,
+    // and its location isn't read: see host.)
+    const mayChangeDocument = Boolean(document) && (() => {
+      try { return window.location.href === "about:blank"; } catch (e) { return false; }
+    })();
+    const documentOf = (() => {
+      try { return (getOwnPropertyDescriptor(window, "document") || {}).get || null; } catch (e) { return null; }
+    })();
+    const syncDocument = () => {
+      let found;
+      try { found = documentOf ? documentOf.call(window) : window.document; } catch (e) { return; }
+      if (!found || found === documentNow) return;
+      documentNow = found;
+      for (const task of documentTasks) {
+        try { task(found); } catch (e) {}
+      }
+    };
+    const eachDocument = (task) => {
+      documentTasks.push(task);
+      if (documentNow) {
+        try { task(documentNow); } catch (e) {}
+      }
+    };
+    if (mayChangeDocument) documentSyncs.set(window, syncDocument);
+
     // Keeps every built-in we replace indistinguishable from the original, so
     // a site that checks for a tampered browser sees nothing changed and works
     // as it would in Safari. A site reads a function's toString() to tell a
@@ -432,6 +473,7 @@ const protect = (window) => {
     const Err = window.Error;
     const OWN_FRAMES = 3;
     const run = (impl, self, args) => {
+      if (mayChangeDocument) syncDocument();
       if (hosted.framesHidden) {
         try {
           return impl.apply(self, args);
@@ -899,7 +941,7 @@ if (config.seeds.canvas != null || config.seeds.webGL != null) { try {
             if (!painted.has(canvas) && !(made && made.kind === "webgl")) return null;
             try {
               const [getContext, drawImage, getImageData, putImageData] = tools;
-              const copy = makeCanvas(width, height);
+              const copy = makeCanvas(width, height, canvas);
               // The copy keeps the canvas's color space, so colors don't shift.
               const context = getContext.call(copy, "2d", made && made.settings);
               drawImage.call(context, canvas, 0, 0);
@@ -915,8 +957,14 @@ if (config.seeds.canvas != null || config.seeds.webGL != null) { try {
 
           if (canvasProto && typeof document !== "undefined") {
             const createElement = document.createElement;
-            const makeCanvas = (width, height) => {
-              const canvas = createElement.call(document, "canvas");
+            // The copy is made in the canvas's own document: the window's
+            // first may be gone (see eachDocument), and a canvas of a
+            // document that is gone never calls toBlob's callback.
+            const ownerOf = window.Node && (getOwnPropertyDescriptor(window.Node.prototype, "ownerDocument") || {}).get;
+            const makeCanvas = (width, height, source) => {
+              let home = null;
+              try { home = ownerOf ? ownerOf.call(source) : null; } catch (e) {}
+              const canvas = createElement.call(home || documentNow || document, "canvas");
               canvas.width = width;
               canvas.height = height;
               return canvas;
@@ -946,6 +994,62 @@ if (config.seeds.canvas != null || config.seeds.webGL != null) { try {
               const copy = noisyCopy(this, (width, height) => new window.OffscreenCanvas(width, height), offscreenTools, offscreenSize);
               return convertToBlob.apply(copy || this, arguments);
             });
+          }
+          // A video frame (WebCodecs' VideoFrame) made of a canvas hands over
+          // its pixels as an export does (copyTo, an encoder): it is made of
+          // the same noisy copy. One made of an image bitmap (which may hold
+          // a canvas's drawing, as drawn) is made of a noisy copy of it, as
+          // the bitmap reads once drawn on a canvas. A video's, an image's or
+          // raw pixels' frame is left as it is.
+          if (typeof window.VideoFrame === "function" && typeof window.OffscreenCanvas === "function" && offscreenTools) {
+            const RealVideoFrame = window.VideoFrame;
+            const RealOffscreen = window.OffscreenCanvas;
+            const getterOf = (type, name) => type && type.prototype && (getOwnPropertyDescriptor(type.prototype, name) || {}).get;
+            const canvasWidthOf = getterOf(window.HTMLCanvasElement, "width");
+            const offscreenWidthOf = getterOf(window.OffscreenCanvas, "width");
+            const bitmapWidthOf = getterOf(window.ImageBitmap, "width");
+            const bitmapHeightOf = getterOf(window.ImageBitmap, "height");
+            const offscreenCopy = (width, height) => new RealOffscreen(width, height);
+            const bitmapCopy = (bitmap) => {
+              const seed = seeds.canvas !== null ? seeds.canvas : seeds.webgl;
+              if (seed === null || !bitmapHeightOf) return null;
+              const width = bitmapWidthOf.call(bitmap);
+              const height = bitmapHeightOf.call(bitmap);
+              if (!width || !height) return null;
+              const [getContext, drawImage, getImageData, putImageData] = offscreenTools;
+              const copy = offscreenCopy(width, height);
+              const context = getContext.call(copy, "2d");
+              drawImage.call(context, bitmap, 0, 0);
+              const image = getImageData.call(context, 0, 0, width, height);
+              const bits = candidatesFor(null, image.data, width, height, 0, 0, width, height, () => null);
+              addPixelNoise(seed, image.data, width, height, 0, 0, width, height, false, bits);
+              putImageData.call(context, image, 0, 0);
+              return copy;
+            };
+            const copyOf = (source) => {
+              if (!source || typeof source !== "object") return null;
+              if (canvasWidthOf && canvasSize && isA(canvasWidthOf, source)) return noisyCopy(source, offscreenCopy, offscreenTools, canvasSize);
+              if (offscreenWidthOf && isA(offscreenWidthOf, source)) return noisyCopy(source, offscreenCopy, offscreenTools, offscreenSize);
+              if (bitmapWidthOf && isA(bitmapWidthOf, source)) return bitmapCopy(source);
+              return null;
+            };
+            const VideoFrame = {
+              VideoFrame: function (source) {
+                "use strict"; /* noor lookalike */
+                if (new.target === undefined) return RealVideoFrame.apply(this, arguments);
+                const args = arraySlice.call(arguments);
+                let copy = null;
+                try { copy = copyOf(args[0]); } catch (e) { copy = null; }
+                if (copy) args[0] = copy;
+                return Reflect.construct(RealVideoFrame, args, new.target === VideoFrame ? RealVideoFrame : new.target);
+              },
+            }.VideoFrame;
+            setPrototypeOf(VideoFrame, getPrototypeOf(RealVideoFrame));
+            defineProperty(VideoFrame, "length", { value: RealVideoFrame.length, configurable: true });
+            defineProperty(VideoFrame, "prototype", { value: RealVideoFrame.prototype, writable: false, enumerable: false, configurable: false });
+            originals.set(VideoFrame, RealVideoFrame);
+            try { defineProperty(RealVideoFrame.prototype, "constructor", { value: VideoFrame, writable: true, enumerable: false, configurable: true }); } catch (e) {}
+            defineProperty(window, "VideoFrame", { value: VideoFrame, writable: true, enumerable: false, configurable: true });
           }
         }
 
@@ -1093,24 +1197,27 @@ if (config.seeds.audio != null) { try {
 } catch (e) {} }
 if (config.seeds.clientRects != null) { try {
         // ClientRects: of the boxes getBoundingClientRect() and
-        // getClientRects() report, the positions and sizes with a fraction
-        // of a pixel (what the fonts and their rendering decide, where a
-        // device shows itself) move by one step of the layout's own
-        // 1/64-pixel grid, up or down as the value's hash says: far below
-        // anything visible, but it changes the hashes fingerprinting
-        // scripts take of these sizes. A whole number (a size a page set
-        // itself) stays as it is, so a page measures back exactly what it
-        // laid out, as a site checks against offsetWidth and the styles;
-        // zero stays zero, so hidden elements still measure 0; a value off
-        // the grid (a rotated or zoomed box) is left as it is, since such
-        // boxes are checked against known sizes. A value always moves the
-        // same way, so measuring twice, or two equal boxes, still agree,
-        // and the move keeps the value's rounding, so offsetWidth and the
-        // like still agree too. A box's right is its left plus its width
-        // to the last bit, as a site checks. The boxes IntersectionObserver
-        // and ResizeObserver report move the same way. The browser returns
-        // new rects on every call, so they are changed in place and keep
-        // their types.
+        // getClientRects() report, the sizes of text, which the fonts and
+        // their rendering decide (where a device shows itself), move by one
+        // step of the layout's own 1/64-pixel grid, up or down as the
+        // value's hash says: far below anything visible, but it changes the
+        // hashes fingerprinting scripts take of these sizes. Only what a page
+        // can't know beforehand moves: the width and height of an inline box
+        // holding something (a span of text: its size comes from its text,
+        // never from a width or height a style gives it), and of a range
+        // within one text. A box a page laid out itself (a block, an image, an
+        // empty or padded inline box), a range holding elements (whose boxes
+        // it reports), and every position stay exactly as laid out, so a page
+        // that sets a size, even 100.5px, measures back that size, as a site
+        // checks. A whole number stays as it is; zero stays zero, so hidden
+        // elements still measure 0; a value off the grid (a rotated or zoomed
+        // box) is left as it is, since such boxes are checked against known
+        // sizes. A value always moves the same way, so measuring twice, or
+        // two equal boxes, or a span and the range over its text, still
+        // agree, and the move keeps the value's rounding, so offsetWidth and
+        // the like still agree too. IntersectionObserver reports a target's
+        // box as getBoundingClientRect does. The browser returns new rects on
+        // every call, so they are changed in place and keep their types.
         {
           const rectsSeed = forSite(config.seeds.clientRects);
           const bits = new Float64Array(1);
@@ -1127,51 +1234,87 @@ if (config.seeds.clientRects != null) { try {
             }
             return value;
           };
-          const shiftRect = (rect) => {
-            const left = shift(rect.left);
-            const top = shift(rect.top);
+          const shiftSize = (rect) => {
             const width = shift(rect.width);
             const height = shift(rect.height);
-            rect.x = left;
-            rect.y = top;
             rect.width = width;
             rect.height = height;
             return rect;
           };
-          for (const proto of [window.Element.prototype, window.Range.prototype]) {
+          // A getter as the browser has it, wherever on the prototype chain it
+          // keeps it (a range's, on Range or on AbstractRange, differs).
+          const getterOf = (proto, name) => {
+            for (let p = proto; p; p = getPrototypeOf(p)) {
+              const descriptor = getOwnPropertyDescriptor(p, name);
+              if (descriptor && descriptor.get) return descriptor;
+            }
+            return null;
+          };
+          // Whether an element's box is a box of text: an inline box (not a
+          // block, an inline-block or a replaced element such as an image)
+          // holding something. Read with the browser's own functions as they
+          // were before the page ran.
+          const getComputed = window.getComputedStyle;
+          const styleProto = window.CSSStyleDeclaration && window.CSSStyleDeclaration.prototype;
+          const propertyOf = styleProto && styleProto.getPropertyValue;
+          const hasChildren = window.Node && window.Node.prototype.hasChildNodes;
+          const ownerOf = window.Node && getterOf(window.Node.prototype, "ownerDocument");
+          const viewOf = window.Document && getterOf(window.Document.prototype, "defaultView");
+          const isTextBox = (element) => {
+            try {
+              if (!getComputed || !propertyOf || !hasChildren || !hasChildren.call(element)) return false;
+              const view = (ownerOf && viewOf && viewOf.get.call(ownerOf.get.call(element))) || window;
+              return propertyOf.call(getComputed.call(view, element), "display") === "inline";
+            } catch (e) {
+              return false;
+            }
+          };
+          // Whether a range lies within one text node.
+          const rangeProto = window.Range && window.Range.prototype;
+          const startOf = rangeProto && getterOf(rangeProto, "startContainer");
+          const endOf = rangeProto && getterOf(rangeProto, "endContainer");
+          const nodeTypeOf = window.Node && getterOf(window.Node.prototype, "nodeType");
+          const isTextRange = (range) => {
+            try {
+              const start = startOf.get.call(range);
+              return start === endOf.get.call(range) && nodeTypeOf.get.call(start) === 3;
+            } catch (e) {
+              return false;
+            }
+          };
+          const patch = (proto, holdsText) => {
+            if (!proto) return;
             define(proto, "getBoundingClientRect", (original) => function () {
               const rect = original.apply(this, arguments);
-              try { shiftRect(rect); } catch (e) {}
+              try { if (holdsText(this)) shiftSize(rect); } catch (e) {}
               return rect;
             });
             define(proto, "getClientRects", (original) => function () {
               const rects = original.apply(this, arguments);
-              try { for (let i = 0; i < rects.length; i++) shiftRect(rects[i]); } catch (e) {}
+              try { if (holdsText(this)) for (let i = 0; i < rects.length; i++) shiftSize(rects[i]); } catch (e) {}
               return rects;
             });
-          }
-          // The read-only boxes the observers report are replaced by moved
-          // copies, one per entry and box, so an entry gives the same box
-          // each time, as the browser does.
+          };
+          patch(window.Element.prototype, isTextBox);
+          patch(rangeProto, isTextRange);
+          // The read-only boxes IntersectionObserver reports for a box of
+          // text are replaced by moved copies, one per entry and box, so an
+          // entry gives the same box each time, as the browser does; the
+          // root's box stays as it is.
           const copies = new WeakMap();
+          const intersection = window.IntersectionObserverEntry && window.IntersectionObserverEntry.prototype;
+          const targetOf = intersection && getterOf(intersection, "target");
           const movedCopy = (entry, name, rect) => {
-            if (!rect || !window.DOMRectReadOnly) return rect;
+            if (!rect || !window.DOMRectReadOnly || !targetOf || !isTextBox(targetOf.get.call(entry))) return rect;
             let own = copies.get(entry);
             if (!own) { own = {}; copies.set(entry, own); }
             if (!(name in own)) {
-              own[name] = new window.DOMRectReadOnly(shift(rect.x), shift(rect.y), shift(rect.width), shift(rect.height));
+              own[name] = new window.DOMRectReadOnly(rect.x, rect.y, shift(rect.width), shift(rect.height));
             }
             return own[name];
           };
-          const intersection = window.IntersectionObserverEntry && window.IntersectionObserverEntry.prototype;
-          for (const name of ["boundingClientRect", "intersectionRect", "rootBounds"]) {
+          for (const name of ["boundingClientRect", "intersectionRect"]) {
             if (intersection) defineGetter(intersection, name, function (rect) { return movedCopy(this, name, rect); });
-          }
-          const resize = window.ResizeObserverEntry && window.ResizeObserverEntry.prototype;
-          if (resize) defineGetter(resize, "contentRect", function (rect) { return movedCopy(this, "contentRect", rect); });
-          const size = window.ResizeObserverSize && window.ResizeObserverSize.prototype;
-          for (const name of ["inlineSize", "blockSize"]) {
-            if (size) defineGetter(size, name, (value) => shift(value));
           }
         }
 
@@ -1278,11 +1421,19 @@ try {
     // contentWindow or contentDocument, as a frame is added to the document
     // (and soon after, for the ways not caught), and when window.open
     // returns one. Windows that load a page get the script from WebKit, and
-    // one protected before is left as it is.
+    // one protected before is left as it is, but for the document it has
+    // now: one it was protected in while empty may have loaded a page of
+    // the same site since, keeping the window (see eachDocument).
     {
       const protectWindow = (other) => {
         try {
-          if (!other || protectedWindows.has(other) || other.location.href !== "about:blank") return;
+          if (!other) return;
+          if (protectedWindows.has(other)) {
+            const sync = documentSyncs.get(other);
+            if (sync) sync();
+            return;
+          }
+          if (other.location.href !== "about:blank") return;
           // Protected by another copy of this script already.
           if (isProtected(other)) return;
         } catch (e) {
@@ -1411,7 +1562,7 @@ try {
           const observer = outside
             ? outside.construct(window.MutationObserver, [outside.callback(added)])
             : new window.MutationObserver(added);
-          observer.observe(document, { childList: true, subtree: true });
+          eachDocument((each) => observer.observe(each, { childList: true, subtree: true }));
         } catch (e) {}
       }
     }

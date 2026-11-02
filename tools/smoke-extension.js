@@ -49,7 +49,9 @@ const audioSum = async (win) => {
 const rect = (win) => { const r = win.document.getElementById("box").getBoundingClientRect(); return r.width + "x" + r.height; };
 const read = async (win) => ({ canvas: canvasHash(win), webgl: webglHash(win), audio: await audioSum(win), rect: rect(win) });
 `;
-const BOX = `<div id="box" style="width:123.4px;height:10px;font:16px serif">Hello</div>`;
+// A span of text: its size is what the fonts decide, which the ClientRects
+// noise moves (a box the page sized itself stays as laid out).
+const BOX = `<span id="box" style="font:16px serif">Hello Noor 123</span>`;
 const PAGE = `<!doctype html><html><head><meta charset="utf-8"><script>
 window.firstLook = { bits: Object.keys(window).filter((k) => /noor/i.test(k)), toDataURL: Function.prototype.toString.call(HTMLCanvasElement.prototype.toDataURL), own: Function.prototype.toString.call(function () { /* noor lookalike */ }) };
 window.violations = [];
@@ -58,8 +60,8 @@ document.addEventListener("securitypolicyviolation", (e) => violations.push(e.vi
 (async () => {
   const result = { page: await read(window), firstLook: window.firstLook };
   const blank = document.createElement("iframe"); document.body.appendChild(blank);
-  const box = blank.contentDocument.createElement("div");
-  box.id = "box"; box.style.cssText = "width:123.4px;height:10px;font:16px serif"; box.textContent = "Hello";
+  const box = blank.contentDocument.createElement("span");
+  box.id = "box"; box.style.cssText = "font:16px serif"; box.textContent = "Hello Noor 123";
   blank.contentDocument.body.appendChild(box);
   result.blank = await read(blank.contentWindow);
   const frames = {};

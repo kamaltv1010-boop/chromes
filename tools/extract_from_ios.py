@@ -56,6 +56,9 @@ shared = swap(shared, """    // Each replacement's real built-in, for its toStri
     const native""", "originals")
 shared = swap(shared, """    // The windows protected from this script, each once.
     const protectedWindows = new WeakSet();
+    // For a window protected while empty, what brings it up to the document
+    // it has now (see eachDocument in protect).
+    const documentSyncs = new WeakMap();
     // The audio buffers the browser rendered or decoded, from any window, and
     // the channels of them already changed.
     const rendered = new WeakSet();
@@ -112,6 +115,9 @@ shared = swap(shared, """    // The windows protected from this script, each onc
         originals: new WeakMap(),
         // The windows protected, each once.
         protectedWindows: new WeakSet(),
+        // For a window protected while empty, what brings it up to the
+        // document it has now (see eachDocument in protect).
+        documentSyncs: new WeakMap(),
         // The audio buffers the browser rendered or decoded, from any
         // window, and the channels of them already changed.
         rendered: new WeakSet(),
@@ -128,7 +134,7 @@ shared = swap(shared, """    // The windows protected from this script, each onc
         marks: new WeakMap(),
       };
     })();
-    const { originals, protectedWindows, rendered, nudged, kinds, painted, clipped, marks } = shared;
+    const { originals, protectedWindows, documentSyncs, rendered, nudged, kinds, painted, clipped, marks } = shared;
 """, "shared state")
 helpers = part("private static let helpers")
 # A worker held before its first line has no location yet, so a worker's
