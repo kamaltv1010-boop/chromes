@@ -1,0 +1,23 @@
+# Temporary (branch diag-1 only, never merged): why Chrome started by the
+# app ends at once on Windows.
+name: Diag
+on:
+  push:
+    branches: ["diag-*"]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Chrome started several ways
+        run: node tools/diag-launch.js
+        timeout-minutes: 6
