@@ -18,6 +18,6 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
-      - name: The app's path, several ways
-        run: node tools/diag-app.js
+      - name: Chrome with no graphics card
+        run: node tools/diag-gpu.js
         timeout-minutes: 6
