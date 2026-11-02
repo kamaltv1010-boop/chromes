@@ -4,7 +4,10 @@
 # so every version stays available and can be gone back to; a pushed tag
 # like v1.2.0 makes a release of that version. Nothing is code-signed, so
 # Windows SmartScreen asks once before the first run ("More info" > "Run
-# anyway").
+# anyway"). A release comes only once every test passed on Windows (the
+# unit tests, then the app and Chrome themselves), and says in Arabic what
+# it fixes and changes (CHANGELOG.md). Run by hand on another branch, it
+# tests and builds, and publishes nothing.
 name: Build
 
 on:
@@ -19,7 +22,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
 
@@ -34,12 +37,27 @@ jobs:
       - name: Test
         run: npm test
 
-      # The runner has Google Chrome: open it through the launcher and
-      # check a page. Best effort, since the runner may have no display.
+      # The runner has Google Chrome, and a desktop: Chrome opened through
+      # the launcher (the protection in pages, frames and workers), then the
+      # app itself driving it (a profile's Chrome; its cookies listed,
+      # exported, deleted, imported; profiles added several at once,
+      # renamed, deleted as their Chrome closes). Any of them failing stops
+      # the release.
       - name: Open Chrome through the launcher
         run: node tools/smoke-chrome.js
-        continue-on-error: true
-        timeout-minutes: 3
+        timeout-minutes: 4
+
+      - name: The app opens Chrome for a profile
+        run: node tools/smoke-app.js
+        timeout-minutes: 4
+
+      - name: A profile's cookies
+        run: node tools/smoke-cookies.js
+        timeout-minutes: 5
+
+      - name: Profiles
+        run: node tools/smoke-profiles.js
+        timeout-minutes: 5
 
       # Every build has its own version, shown in the ⋯ menu, in Settings >
       # About and in the file names: 1.0.<run number>, or the tag's version
@@ -56,16 +74,26 @@ jobs:
           npm version "$version" --no-git-tag-version --allow-same-version
           echo "NOOR_VERSION=$version" >> "$GITHUB_ENV"
           echo "Building Noor for Chrome $version"
+          # The release's description, in Arabic: what this version fixes
+          # and changes, from its own section of CHANGELOG.md, or
+          # "Unreleased" until it has one; then how to install it.
+          section() { awk -v h="## $1" '$0 == h { on = 1; next } on && /^## / { exit } on' CHANGELOG.md; }
+          changes="$(section "$version")"
+          if [ -z "$(printf '%s' "$changes" | tr -d '[:space:]')" ]; then changes="$(section "Unreleased")"; fi
           {
-            echo "Build $version of commit ${GITHUB_SHA::7}."
+            echo "## Noor for Chrome $version"
             echo
-            echo '```'
-            git log -1 --pretty=%B
-            echo '```'
+            echo "### ما الذي أُصلح وتغيّر في هذه النسخة"
             echo
-            echo "Windows 10/11, 64-bit. The portable .exe runs without installing; the Setup .exe installs. SmartScreen asks once: More info, then Run anyway."
+            if [ -n "$(printf '%s' "$changes" | tr -d '[:space:]')" ]; then printf '%s\n' "$changes"; else git log -1 --pretty=%B; fi
             echo
-            echo "Noor-Edge-*.zip is Noor for Edge, the extension (Edge or Chrome): Canvas, WebGL, audio and ClientRects noise on every site. Unzip it, then edge://extensions > Developer mode > Load unpacked."
+            echo "### التثبيت"
+            echo
+            echo "لـ Windows 10 و11 (64-bit)، ويلزمه Google Chrome مثبّتاً. \`NoorChrome-Setup-$version-windows-x64.exe\` يثبّت البرنامج، و\`NoorChrome-$version-windows-x64-portable.exe\` يعمل دون تثبيت. يسأل SmartScreen مرة واحدة: «More info» ثم «Run anyway»."
+            echo
+            echo "\`Noor-Edge-$version.zip\` هو Noor for Edge، الإضافة (لـ Edge أو Chrome): فكّه، ثم edge://extensions ← Developer mode ← Load unpacked."
+            echo
+            echo "الـ commit: \`${GITHUB_SHA::7}\`"
           } > release-notes.md
 
       - name: Build the .exe
@@ -86,6 +114,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish the release
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.NOOR_VERSION }}
