@@ -1,12 +1,15 @@
 "use strict";
 const crypto = require("crypto");
+const { GPUS, graphicsOf } = require("./gpus");
 
 /// The protections, each with a seed per profile that decides the values
 /// pages see. The noise ones give canvas, WebGL and audio values and
 /// ClientRects that differ from this PC's but stay the same on a site;
 /// "screen" and "hardware" show another common PC's screen size, core
 /// count and memory. Whether each is on is one setting for all profiles.
-const KINDS = ["canvas", "webGL", "audio", "clientRects", "screen", "hardware"];
+/// "gpu" (WebGL Vendor & Renderer) shows a common PC's graphics card in
+/// place of this one's (see main/gpus.js).
+const KINDS = ["canvas", "webGL", "gpu", "audio", "clientRects", "screen", "hardware"];
 const NOISE_KINDS = ["canvas", "webGL", "audio", "clientRects"];
 
 /// Common PC screens, in CSS pixels.
@@ -106,6 +109,11 @@ class Fingerprint {
     return this.pick(this.seed("hardware", profile), HARDWARE);
   }
 
+  /// The graphics card a profile's pages see (WebGL Vendor & Renderer).
+  gpu(profile) {
+    return this.pick(this.seed("gpu", profile), GPUS);
+  }
+
   /// What a profile's pages see of the screen and hardware: the profile's,
   /// or this PC's own while that protection is off.
   shown(profile) {
@@ -116,6 +124,7 @@ class Fingerprint {
       hardware: hardware ? this.hardware(profile) : this.realHardware,
       realScreen: !screen,
       realHardware: !hardware,
+      gpu: this.isEnabled("gpu") ? this.gpu(profile).name : null,
     };
   }
 
@@ -127,6 +136,10 @@ class Fingerprint {
     if (kind === "hardware") {
       return String(this.pick(seed, HARDWARE).cores);
     }
+    if (kind === "gpu") {
+      const gpu = this.pick(seed, GPUS);
+      return `${gpu.name} ${gpu.id}`;
+    }
     return String(seed);
   }
 
@@ -136,6 +149,9 @@ class Fingerprint {
     }
     if (kind === "hardware") {
       return HARDWARE.length;
+    }
+    if (kind === "gpu") {
+      return GPUS.length;
     }
     return Infinity;
   }
@@ -152,6 +168,7 @@ class Fingerprint {
       seeds,
       screen: this.isEnabled("screen") ? this.screen(profile) : null,
       hardware: this.isEnabled("hardware") ? this.hardware(profile) : null,
+      gpu: this.isEnabled("gpu") ? graphicsOf(this.gpu(profile)) : null,
     };
   }
 }

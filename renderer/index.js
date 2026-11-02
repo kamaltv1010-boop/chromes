@@ -3,6 +3,7 @@
   const KIND_TITLES = {
     canvas: ["Canvas", "Drawings get noise a site can't tell from the real thing."],
     webGL: ["WebGL", "3D drawings get the same noise."],
+    gpu: ["WebGL Vendor & Renderer", "Sites see a common PC graphics card's name instead of this PC's."],
     audio: ["Audio", "Sound processing gets noise. Off at first: on a PC this value is nearly the same for everyone with the same Chrome, so noise would stand out."],
     clientRects: ["ClientRects", "Measured sizes of elements shift slightly. Off at first: on a PC these sizes are the same for everyone with the same Windows and fonts, so a shift would stand out."],
     screen: ["Screen Size", "Sites see another common PC screen."],
@@ -71,6 +72,7 @@
       details.textContent = [
         `${profile.realScreen ? "this PC's screen " : ""}${profile.screen.width} × ${profile.screen.height}`,
         `${profile.realHardware ? "this PC's " : ""}${profile.hardware.cores} cores · ${profile.hardware.memory} GB`,
+        profile.gpu ? profile.gpu : "this PC's graphics card",
         profile.extensions ? `${profile.extensions} extension${profile.extensions === 1 ? "" : "s"}` : "",
         profile.proxy ? `proxy ${profile.proxy}` + (settings.timezoneFromIP ? ` · ${profile.zone || "time zone not found yet"}` : "") : "",
       ].filter(Boolean).join(" · ");

@@ -8,6 +8,7 @@ const os = require("os");
 const path = require("path");
 const { ChromeInstance, findChrome } = require("../main/chrome");
 const { pageScript, workerScript, NAME } = require("../main/inject");
+const { GPUS, graphicsOf } = require("../main/gpus");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</title><style id="mq"></style></head><body><div id="probe" style="width:1px"></div>
@@ -33,7 +34,8 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${server.address().port}/`;
-  const config = { seeds: { canvas: 1111, webGL: 2222, audio: null, clientRects: null }, screen: { width: 2560, height: 1440 }, hardware: { cores: 6, memory: 8 } };
+  // (A graphics card from the list: WebGL Vendor & Renderer.)
+  const config = { seeds: { canvas: 1111, webGL: 2222, audio: null, clientRects: null }, screen: { width: 2560, height: 1440 }, hardware: { cores: 6, memory: 8 }, gpu: graphicsOf(GPUS[6]) };
   const instance = new ChromeInstance({
     executable,
     profile: { id: "smoke", name: "Smoke", proxy: "" },
@@ -43,14 +45,16 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
     screen: config.screen,
     timezone: "Asia/Tokyo",
     blockTrackers: true,
-    extraArgs: (process.env.NOOR_CHROME_ARGS || "").split(" ").filter(Boolean),
+    // (WebGL drawn by SwiftShader where there is no graphics card, as on the
+    // CI's machines.)
+    extraArgs: ["--enable-unsafe-swiftshader", ...(process.env.NOOR_CHROME_ARGS || "").split(" ").filter(Boolean)],
   });
   await instance.start();
   await instance.open(base);
   await sleep(3000);
   const probe = `(async () => {
     const worker = await new Promise((resolve) => {
-      const code = "postMessage({ cores: navigator.hardwareConcurrency, memory: navigator.deviceMemory, zone: Intl.DateTimeFormat().resolvedOptions().timeZone, toStr: Function.prototype.toString.call(Object.getOwnPropertyDescriptor(WorkerNavigator.prototype, 'hardwareConcurrency').get) })";
+      const code = "let gpu = 'no webgl'; try { const g = new OffscreenCanvas(1, 1).getContext('webgl'); const e = g && g.getExtension('WEBGL_debug_renderer_info'); gpu = e ? g.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'no extension'; } catch (e) { gpu = 'ERR ' + e.message; } postMessage({ cores: navigator.hardwareConcurrency, memory: navigator.deviceMemory, zone: Intl.DateTimeFormat().resolvedOptions().timeZone, toStr: Function.prototype.toString.call(Object.getOwnPropertyDescriptor(WorkerNavigator.prototype, 'hardwareConcurrency').get), gpu })";
       const w = new Worker(URL.createObjectURL(new Blob([code], { type: "text/javascript" })));
       const timer = setTimeout(() => resolve("timeout"), 5000);
       w.onmessage = (e) => { clearTimeout(timer); resolve(e.data); };
@@ -68,7 +72,10 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
     const css = (query) => { document.getElementById("mq").textContent = "@media " + query + " { #probe { width: 7px !important } }"; const width = getComputedStyle(document.getElementById("probe")).width; document.getElementById("mq").textContent = ""; return width === "7px"; };
     const c = document.createElement("canvas"); c.width = 120; c.height = 40; const ctx = c.getContext("2d"); ctx.font = "16px Arial"; ctx.fillText("Noor ✓", 4, 24);
     const f = document.getElementById("f");
+    // The graphics card WebGL names (WebGL Vendor & Renderer), in the page and a frame.
+    const renderer = (win) => { const g = win.document.createElement("canvas").getContext("webgl"); const e = g && g.getExtension("WEBGL_debug_renderer_info"); return e ? g.getParameter(e.UNMASKED_VENDOR_WEBGL) + " | " + g.getParameter(e.UNMASKED_RENDERER_WEBGL) : "no webgl"; };
     return {
+      gpu: renderer(window), frameGpu: renderer(f.contentWindow),
       title: document.title, screen: screen.width + "x" + screen.height, cores: navigator.hardwareConcurrency, memory: navigator.deviceMemory,
       zone: Intl.DateTimeFormat().resolvedOptions().timeZone, offset: new Date(2026, 0, 15).getTimezoneOffset(),
       webdriver: navigator.webdriver, toStr: Function.prototype.toString.call(Object.getOwnPropertyDescriptor(Screen.prototype, "width").get),
@@ -90,7 +97,9 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Smoke</tit
   console.log(JSON.stringify({ executable, page, requests }, null, 1));
   const ok = page.screen === "2560x1440" && page.cores === 6 && page.memory === 8 && page.zone === "Asia/Tokyo" && page.worker && page.worker.cores === 6 && page.worker.zone === "Asia/Tokyo" && page.frameScreen === 2560 && page.webdriver === false && page.gaBlocked && /native code/.test(page.toStr)
     && page.stack.includes("valueOf") && !page.stack.includes(NAME)
-    && page.nested === 6 && page.cssScreen === true && page.frameCanvas === true && page.oldMark === false;
+    && page.nested === 6 && page.cssScreen === true && page.frameCanvas === true && page.oldMark === false
+    && page.gpu === `${config.gpu.vendor} | ${config.gpu.renderer}` && page.frameGpu === page.gpu
+    && page.worker.gpu === config.gpu.renderer;
   await instance.close();
   server.close();
   console.log(ok ? "SMOKE OK" : "SMOKE FAILED");

@@ -193,6 +193,9 @@ parts = [
         "defineGetter(navigatorProto, \"hardwareConcurrency\", () => config.hardware.cores);\n"
         "defineGetter(navigatorProto, \"deviceMemory\", () => config.hardware.memory);\n"
     )),
+    # WebGL Vendor & Renderer: a common PC's graphics card, not this one's
+    # (main/gpus.js, the same list as Noor's).
+    ("config.gpu", (Path(__file__).resolve().parent.parent / "scripts" / "parts" / "gpu.js").read_text(encoding="utf-8")),
 ]
 assert "\\#(" not in shared + helpers + frames, "unreplaced interpolation"
 

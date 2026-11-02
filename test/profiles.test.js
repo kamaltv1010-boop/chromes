@@ -61,7 +61,24 @@ test("config: noise seeds for what is on (audio and ClientRects off at first), a
   assert.equal(config.hardware.memory, 8);
   fingerprint.setEnabled("screen", false);
   assert.equal(fingerprint.config(a).screen, null);
-  assert.deepEqual(KINDS, ["canvas", "webGL", "audio", "clientRects", "screen", "hardware"]);
+  assert.deepEqual(KINDS, ["canvas", "webGL", "gpu", "audio", "clientRects", "screen", "hardware"]);
+});
+
+test("WebGL Vendor & Renderer: a common PC's card, as Chrome on Windows names it, its own for each profile; off, none", () => {
+  const { profiles, fingerprint } = make();
+  const a = profiles.add("A");
+  const { gpu } = fingerprint.config(a);
+  assert.match(gpu.vendor, /^Google Inc\. \((NVIDIA|Intel|AMD)\)$/);
+  assert.match(gpu.renderer, /^ANGLE \((NVIDIA|Intel|AMD), .+ \(0x[0-9A-F]{8}\) Direct3D11 vs_5_0 ps_5_0, D3D11\)$/);
+  assert.match(gpu.webgpu.vendor, /^(nvidia|intel|amd)$/);
+  assert.equal(fingerprint.shown(a).gpu, fingerprint.gpu(a).name);
+  // New gives another card (there is another to pick).
+  const before = fingerprint.visibleValue(fingerprint.seed("gpu", a), "gpu");
+  fingerprint.newSeed("gpu", a);
+  assert.notEqual(fingerprint.visibleValue(fingerprint.seed("gpu", a), "gpu"), before);
+  fingerprint.setEnabled("gpu", false);
+  assert.equal(fingerprint.config(a).gpu, null);
+  assert.equal(fingerprint.shown(a).gpu, null);
 });
 
 test("with screen or hardware protection off, a profile shows this PC's own, as its pages see them", () => {
@@ -74,7 +91,7 @@ test("with screen or hardware protection off, a profile shows this PC's own, as 
   assert.equal(on.realScreen || on.realHardware, false);
   fingerprint.setEnabled("screen", false);
   fingerprint.setEnabled("hardware", false);
-  assert.deepEqual(fingerprint.shown(a), { screen: { width: 1280, height: 800 }, hardware: { cores: 4, memory: 8 }, realScreen: true, realHardware: true });
+  assert.deepEqual(fingerprint.shown(a), { screen: { width: 1280, height: 800 }, hardware: { cores: 4, memory: 8 }, realScreen: true, realHardware: true, gpu: fingerprint.gpu(a).name });
 });
 
 test("this PC's memory as Chrome tells pages: the nearest power of two, from 0.25 to 8 GB", () => {
