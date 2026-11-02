@@ -19,5 +19,5 @@ jobs:
       - name: Install
         run: npm ci
       - name: Chrome with no graphics card
-        run: node tools/diag-gpu3.js
+        run: node tools/diag-gpu4.js
         timeout-minutes: 14
