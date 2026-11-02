@@ -171,8 +171,13 @@ class ChromeInstance extends EventEmitter {
     fs.mkdirSync(this.dir, { recursive: true });
     setWebRTCPolicy(this.dir, webRTCPolicy(this.profile.proxy));
     this.port = await freePort();
+    const startedAt = Date.now();
     this.child = spawn(this.executable, this.args(), { stdio: "ignore", windowsHide: false });
-    this.child.on("exit", () => this.ended());
+    this.child.on("exit", (code, signal) => {
+      // (How it ended, said by open if a tab can't be opened.)
+      this.exitedWith = { code, signal, after: Date.now() - startedAt };
+      this.ended();
+    });
     this.child.on("error", () => this.ended());
     try {
       const address = await this.waitForAddress();
@@ -464,14 +469,26 @@ class ChromeInstance extends EventEmitter {
   /// Opens `url` in a new tab, once the tab has the protection: a tab
   /// opened at an address by the debugger itself isn't held for it.
   async open(url) {
-    const created = await this.send("Target.createTarget", { url: "about:blank" });
+    // Chrome starting may not take a new tab yet: asked again, for 10 s at
+    // most; then the tab waited for, 15 s at most.
+    let created = null;
+    let refused = "";
+    for (let i = 0; i < 40 && !created && !this.closed && this.connection; i++) {
+      try {
+        created = await this.connection.send("Target.createTarget", { url: "about:blank" });
+      } catch (error) {
+        refused = String((error && error.message) || error);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
     const targetId = created && created.targetId;
-    for (let i = 0; targetId && i < 100 && !this.ready.has(targetId); i++) {
+    for (let i = 0; targetId && !this.closed && i < 300 && !this.ready.has(targetId); i++) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     const sessionId = targetId && this.ready.has(targetId) ? await this.ready.get(targetId) : null;
     if (!sessionId) {
-      throw new Error("The new tab wasn't reached");
+      const exit = this.exitedWith ? ` (its process ended: ${this.exitedWith.signal || "code " + this.exitedWith.code}, ${this.exitedWith.after} ms after it started)` : "";
+      throw new Error(this.closed ? `Chrome closed before its new tab opened${exit}` : !targetId ? `Chrome opened no new tab${refused ? ": " + refused : ""}` : "The new tab wasn't reached");
     }
     await this.send("Page.navigate", { url }, sessionId);
     return created;

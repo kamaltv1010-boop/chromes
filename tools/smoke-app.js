@@ -23,7 +23,16 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const result = await main(async (e, url) => {
     const profile = global.noorTest.profiles.all()[0];
     const instance = await global.noorTest.open(profile);
-    await instance.open(url);
+    try {
+      await instance.open(url);
+    } catch (error) {
+      // What became of Chrome, for the log: closed, how its process ended,
+      // and whether its debugging port still answers (Chrome started again
+      // by itself, out of Noor's hands).
+      let port = "no answer";
+      try { port = (await (await fetch(`http://127.0.0.1:${instance.port}/json/version`)).json()).Browser || "answers"; } catch (e) {}
+      return { failed: String(error.message || error), closed: instance.closed, exitedWith: instance.exitedWith || null, port };
+    }
     await new Promise((resolve) => setTimeout(resolve, 2500));
     const page = await instance.evaluate("({ title: document.title, screen: screen.width + 'x' + screen.height, cores: navigator.hardwareConcurrency, zone: Intl.DateTimeFormat().resolvedOptions().timeZone, webdriver: navigator.webdriver })");
     const state = global.noorTest.state();
@@ -31,7 +40,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     return { page, running: state.profiles[0].running, expected: { screen: state.profiles[0].screen, cores: state.profiles[0].hardware.cores } };
   }, base);
   console.log(JSON.stringify(result, null, 1));
-  const ok = result.page.screen === `${result.expected.screen.width}x${result.expected.screen.height}` && result.page.cores === result.expected.cores && result.page.zone === "Europe/Paris" && result.page.webdriver === false && result.running === true;
+  const ok = !result.failed && result.page.screen === `${result.expected.screen.width}x${result.expected.screen.height}` && result.page.cores === result.expected.cores && result.page.zone === "Europe/Paris" && result.page.webdriver === false && result.running === true;
   await app.close();
   server.close();
   console.log(ok ? "APP SMOKE OK" : "APP SMOKE FAILED");
