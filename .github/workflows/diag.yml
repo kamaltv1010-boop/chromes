@@ -18,6 +18,6 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
-      - name: Chrome started several ways
-        run: node tools/diag-launch.js
+      - name: The app's path, several ways
+        run: node tools/diag-app.js
         timeout-minutes: 6
