@@ -28,6 +28,11 @@ const busy = new Map();
 
 const chromePath = () => findChrome(store.get("chromePath", null));
 
+// Tests keep their data apart (a folder of their own, from the start).
+if (process.env.NOOR_USER_DATA) {
+  app.setPath("userData", process.env.NOOR_USER_DATA);
+}
+
 /// A profile by id, the template of new profiles' extensions included.
 const profileOf = (id) => (id === template.TEMPLATE_ID ? template.templateProfile() : profiles.find(id));
 const templateDir = () => profiles.dir(template.templateProfile());
@@ -193,6 +198,9 @@ const start = async (profile) => {
   instance.on("exit", () => {
     instances.delete(profile.id);
     push();
+    if (profile.id !== template.TEMPLATE_ID) {
+      burnAfter(profile, instance).catch(() => {});
+    }
   });
   try {
     await instance.start();
@@ -219,6 +227,48 @@ const exited = (instance, ms = 10000) => new Promise((resolve) => {
   });
 });
 
+/// The most profiles made at once ("Add several").
+const MAX_AT_ONCE = 50;
+
+/// A new profile, with the template's extensions, copied from it as its
+/// Chrome left them: closed first, so everything is written (Chrome writes
+/// an extension just added only a few seconds later, or as it closes) and
+/// no file is held open.
+const makeProfile = async (name, options = {}) => {
+  const templateChrome = instances.get(template.TEMPLATE_ID);
+  if (templateChrome) {
+    await templateChrome.close();
+    await exited(templateChrome);
+  }
+  const profile = profiles.add(name, options);
+  try {
+    template.copyInto(templateDir(), profiles.dir(profile));
+  } catch (error) {
+    // It starts without them rather than not at all, and the user knows.
+    dialog.showMessageBox(win, {
+      type: "warning",
+      message: `"${profile.name}" was added without the template's extensions`,
+      detail: `They couldn't be copied: ${error.message || error}`,
+    });
+  }
+  return profile;
+};
+
+/// A profile deleted as its Chrome closes (see Profiles.setBurner): once
+/// that Chrome has quit (its files let go), the profile goes with all it
+/// kept, and a new one, deleted as it closes too, is made in its place,
+/// with a number of its own.
+const burnAfter = async (profile, instance) => {
+  await exited(instance);
+  const current = profiles.find(profile.id);
+  if (!current || !current.burner || instances.has(profile.id) || opening.has(profile.id)) {
+    return;
+  }
+  profiles.remove(profile.id);
+  await makeProfile("", { burner: true });
+  push();
+};
+
 const handle = (channel, handler) => {
   ipcMain.handle("noor:" + channel, async (event, ...args) => {
     const result = await handler(...args);
@@ -229,27 +279,15 @@ const handle = (channel, handler) => {
 const registerIPC = () => {
   handle("state", () => state());
   handle("profiles:add", async (name) => {
-    // A new profile starts with the template's extensions, copied from it
-    // as its Chrome left them: closed first, so everything is written
-    // (Chrome writes an extension just added only a few seconds later, or
-    // as it closes) and no file is held open.
-    const templateChrome = instances.get(template.TEMPLATE_ID);
-    if (templateChrome) {
-      await templateChrome.close();
-      await exited(templateChrome);
-    }
-    const profile = profiles.add(name);
-    try {
-      template.copyInto(templateDir(), profiles.dir(profile));
-    } catch (error) {
-      // It starts without them rather than not at all, and the user knows.
-      dialog.showMessageBox(win, {
-        type: "warning",
-        message: `"${profile.name}" was added without the template's extensions`,
-        detail: `They couldn't be copied: ${error.message || error}`,
-      });
+    await makeProfile(name);
+  });
+  handle("profiles:addMany", async (count) => {
+    const wanted = Math.max(1, Math.min(MAX_AT_ONCE, Math.floor(Number(count)) || 0));
+    for (let i = 0; i < wanted; i++) {
+      await makeProfile("");
     }
   });
+  handle("profiles:burner", (id, on) => { profiles.setBurner(id, on); });
   handle("profiles:rename", (id, name) => { profiles.rename(id, name); });
   handle("profiles:proxy", (id, proxy) => { profiles.setProxy(id, proxy); });
   handle("profiles:remove", async (id) => {

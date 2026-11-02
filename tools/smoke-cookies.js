@@ -24,8 +24,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const base = `http://127.0.0.1:${server.address().port}/`;
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), "noor-chrome-cookies-"));
   const file = path.join(userData, "exported cookies.txt");
-  const app = await electron.launch({ executablePath: require(path.join(root, "node_modules", "electron")), args: [root, "--no-sandbox"], env: { ...process.env, NOOR_TEST: "1", NOOR_TEST_TIMEZONE: "Europe/Paris" } });
-  await app.evaluate(({ app }, dir) => app.setPath("userData", dir), userData).catch(() => {});
+  const app = await electron.launch({ executablePath: require(path.join(root, "node_modules", "electron")), args: [root, "--no-sandbox"], env: { ...process.env, NOOR_TEST: "1", NOOR_TEST_TIMEZONE: "Europe/Paris", NOOR_USER_DATA: userData } });
   const main = (fn, arg) => app.evaluate(fn, arg);
   for (let i = 0; i < 100; i++) { if (await main(() => Boolean(global.noorTest))) break; await sleep(100); }
   const window = await app.firstWindow();

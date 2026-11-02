@@ -99,3 +99,24 @@ test("this PC's memory as Chrome tells pages: the nearest power of two, from 0.2
   const gb = 1024 ** 3;
   assert.deepEqual([0.1, 0.5, 3, 4, 6, 7.8, 16, 64].map((n) => deviceMemory(n * gb)), [0.25, 0.5, 2, 4, 4, 8, 8, 8]);
 });
+
+test("unnamed profiles get the next number, never a deleted one's; a profile may be deleted as its Chrome closes", () => {
+  const { profiles } = make();
+  const a = profiles.add("");
+  const b = profiles.add("");
+  assert.deepEqual([a.name, b.name], ["Profile 1", "Profile 2"]);
+  profiles.remove(b.id);
+  // Made in place of Profile 2: a number of its own.
+  const c = profiles.add("", { burner: true });
+  assert.equal(c.name, "Profile 3");
+  assert.equal(profiles.find(c.id).burner, true);
+  assert.equal(profiles.find(a.id).burner, false);
+  profiles.setBurner(a.id, true);
+  assert.equal(profiles.find(a.id).burner, true);
+  profiles.setBurner(a.id, false);
+  assert.equal(profiles.find(a.id).burner, false);
+  // Several at once, oldest first, in order.
+  const many = [1, 2, 3].map(() => profiles.add(""));
+  assert.deepEqual(many.map((p) => p.name), ["Profile 4", "Profile 5", "Profile 6"]);
+  assert.deepEqual(profiles.all().map((p) => p.name), ["Profile 1", "Profile 3", "Profile 4", "Profile 5", "Profile 6"]);
+});

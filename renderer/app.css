@@ -73,3 +73,5 @@ dialog#cookies::backdrop { background: rgba(0, 0, 0, 0.35); }
 #cookies-list summary .t { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #cookies-list .cookie { color: var(--muted); font-size: 12px; padding: 3px 0 3px 18px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .danger { color: #c62828; }
+dialog#ask { width: min(440px, 90vw); border: 0; border-radius: 14px; padding: 18px 20px; background: var(--bg); color: var(--fg); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+dialog#ask::backdrop { background: rgba(0, 0, 0, 0.35); }

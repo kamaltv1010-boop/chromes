@@ -34,7 +34,7 @@
   <h3>Profiles</h3>
   <div class="card" id="profiles"></div>
   <div class="card">
-    <div class="newrow"><input type="text" id="newname" placeholder="New profile"><button class="button" id="add">Add</button></div>
+    <div class="newrow"><input type="text" id="newname" placeholder="New profile"><button class="button" id="add">Add</button><button class="button secondary" id="addmany">Add several…</button></div>
   </div>
   <p class="status" id="chromestatus"></p>
 
@@ -71,6 +71,12 @@
   <div class="toolbar"><input type="search" id="cookies-search" placeholder="Search sites and cookie names"></div>
   <div class="list" id="cookies-list"></div>
   <p class="footer">Cookies keep you signed in: a file of them signs in whoever has it. Chrome keeps them encrypted; Noor asks this profile's Chrome for them (opened with no window if it is closed).</p>
+</dialog>
+<dialog id="ask">
+  <h3 id="ask-title" style="margin-top:0"></h3>
+  <p class="footer" id="ask-text"></p>
+  <input type="text" id="ask-value" style="width:100%;box-sizing:border-box">
+  <div class="toolbar" style="margin-top:14px"><span style="flex:1"></span><button class="button small secondary" id="ask-cancel">Cancel</button><button class="button small" id="ask-ok">OK</button></div>
 </dialog>
 <script src="index.js"></script>
 </body>

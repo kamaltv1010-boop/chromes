@@ -21,7 +21,7 @@ class Profiles {
     }
     return saved
       .filter((p) => p && typeof p.id === "string" && typeof p.name === "string")
-      .map((p) => ({ id: p.id, name: p.name, proxy: typeof p.proxy === "string" ? p.proxy : "", created: Number(p.created) || 0 }))
+      .map((p) => ({ id: p.id, name: p.name, proxy: typeof p.proxy === "string" ? p.proxy : "", created: Number(p.created) || 0, burner: p.burner === true }))
       .sort((a, b) => a.created - b.created);
   }
 
@@ -29,10 +29,29 @@ class Profiles {
     return this.all().find((p) => p.id === id) || null;
   }
 
-  add(name) {
-    const profile = { id: crypto.randomUUID(), name: String(name || "").trim() || `Profile ${this.all().length + 1}`, proxy: "", created: Date.now() };
-    this.save(this.all().concat([profile]));
+  add(name, { burner = false } = {}) {
+    const all = this.all();
+    // (Created after every other, even within the same millisecond.)
+    const created = Math.max(Date.now(), ...all.map((p) => p.created + 1));
+    const profile = { id: crypto.randomUUID(), name: String(name || "").trim() || this.nextName(), proxy: "", created, burner: Boolean(burner) };
+    this.save(all.concat([profile]));
     return profile;
+  }
+
+  /// "Profile N" with the next number no profile's name has: after the
+  /// highest one, so a profile made in place of a deleted one gets a new
+  /// number, not the deleted one's.
+  nextName() {
+    const used = this.all().map((p) => /^Profile (\d+)$/.exec(p.name)).filter(Boolean).map((m) => Number(m[1]));
+    const highest = Math.max(this.store.get("lastProfileNumber", 0) || 0, this.all().length, ...used);
+    this.store.set("lastProfileNumber", highest + 1);
+    return `Profile ${highest + 1}`;
+  }
+
+  /// Whether a profile is deleted (with all it kept) as its Chrome closes,
+  /// and a new one made in its place.
+  setBurner(id, on) {
+    this.save(this.all().map((p) => (p.id === id ? { ...p, burner: Boolean(on) } : p)));
   }
 
   rename(id, name) {
@@ -67,7 +86,7 @@ class Profiles {
   }
 
   save(list) {
-    this.store.set("profiles", list.map((p) => ({ id: p.id, name: p.name, proxy: p.proxy || "", created: p.created })));
+    this.store.set("profiles", list.map((p) => ({ id: p.id, name: p.name, proxy: p.proxy || "", created: p.created, burner: p.burner === true })));
   }
 
   /// The folder Chrome keeps a profile in.

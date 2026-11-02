@@ -1,5 +1,26 @@
 (() => {
   const $ = (id) => document.getElementById(id);
+  /// A question in the window itself (Electron has no window.prompt: it
+  /// throws): a value to type (`value`, given or "") or, with `value`
+  /// null, a yes or no. Settles with what was typed (true for a yes), or
+  /// null if it was cancelled.
+  const ask = ({ title, text = "", value = null, ok = "OK" }) => new Promise((resolve) => {
+    const dialog = $("ask");
+    const input = $("ask-value");
+    $("ask-title").textContent = title;
+    $("ask-text").textContent = text;
+    $("ask-ok").textContent = ok;
+    input.hidden = value === null;
+    input.value = value === null ? "" : String(value);
+    let answer = null;
+    const done = (yes) => { answer = yes ? (value === null ? true : input.value) : null; dialog.close(); };
+    $("ask-ok").onclick = () => done(true);
+    $("ask-cancel").onclick = () => done(false);
+    input.onkeydown = (event) => { if (event.key === "Enter") { event.preventDefault(); done(true); } };
+    dialog.onclose = () => resolve(answer);
+    dialog.showModal();
+    if (value !== null) input.select(); else $("ask-ok").focus();
+  });
   const KIND_TITLES = {
     canvas: ["Canvas", "Drawings get noise a site can't tell from the real thing."],
     webGL: ["WebGL", "3D drawings get the same noise."],
@@ -75,6 +96,7 @@
         profile.gpu ? profile.gpu : "this PC's graphics card",
         profile.extensions ? `${profile.extensions} extension${profile.extensions === 1 ? "" : "s"}` : "",
         profile.proxy ? `proxy ${profile.proxy}` + (settings.timezoneFromIP ? ` · ${profile.zone || "time zone not found yet"}` : "") : "",
+        profile.burner ? "deleted when Chrome closes" : "",
       ].filter(Boolean).join(" · ");
       name.append(details);
       const controls = document.createElement("div");
@@ -92,8 +114,12 @@
       controls.append(menuButton([
         ["New fingerprints", () => noor.invoke("fingerprint:new", profile.id).then(apply)],
         ["Cookies…", () => cookies.show(profile)],
-        ["Rename…", () => { const value = prompt("Profile name", profile.name); if (value !== null) noor.invoke("profiles:rename", profile.id, value).then(apply); }],
-        ["Proxy…", () => { const value = prompt("Proxy, like socks5://host:1080 or http://host:8080 (empty for none)", profile.proxy || ""); if (value !== null) noor.invoke("profiles:proxy", profile.id, value).then(apply); }],
+        [`${profile.burner ? "✓ " : ""}Delete when Chrome closes`, () => {
+          if (profile.burner) noor.invoke("profiles:burner", profile.id, false).then(apply);
+          else ask({ title: `Delete "${profile.name}" when its Chrome closes?`, text: "Its cookies, logins, extensions, history and fingerprints go as its Chrome closes, and a new profile is made in its place each time.", ok: "Delete when closed" }).then((yes) => { if (yes) noor.invoke("profiles:burner", profile.id, true).then(apply); });
+        }],
+        ["Rename…", () => ask({ title: "Rename profile", value: profile.name, ok: "Rename" }).then((value) => { if (value !== null) noor.invoke("profiles:rename", profile.id, value).then(apply); })],
+        ["Proxy…", () => ask({ title: `Proxy of ${profile.name}`, text: "Like socks5://host:1080 or http://host:8080; empty for none.", value: profile.proxy || "", ok: "Save" }).then((value) => { if (value !== null) noor.invoke("profiles:proxy", profile.id, value).then(apply); })],
         ["Delete", () => noor.invoke("profiles:remove", profile.id).then(apply), "danger"],
       ]));
       element.append(name, controls);
@@ -215,7 +241,7 @@
     $("cookies-export-json").addEventListener("click", () => act(() => noor.invoke("cookies:export", profile.id, "json"), (r) => `Exported ${r.count} cookies to ${r.file}.`));
     $("cookies-import").addEventListener("click", () => act(() => noor.invoke("cookies:import", profile.id), (r) => `Imported ${r.count} cookie${r.count === 1 ? "" : "s"}.`, true));
     $("cookies-clear").addEventListener("click", () => {
-      if (confirm(`Delete every cookie of ${profile.name}? Its sites will sign it out.`)) act(() => noor.invoke("cookies:clear", profile.id), (r) => `Deleted ${r.count} cookie${r.count === 1 ? "" : "s"}.`, true);
+      ask({ title: `Delete every cookie of ${profile.name}?`, text: "Its sites will sign it out.", ok: "Delete all" }).then((yes) => { if (yes) act(() => noor.invoke("cookies:clear", profile.id), (r) => `Deleted ${r.count} cookie${r.count === 1 ? "" : "s"}.`, true); });
     });
     return {
       show(which) {
@@ -237,6 +263,12 @@
     noor.invoke("profiles:add", $("newname").value).then((next) => { $("newname").value = ""; apply(next); });
   });
   $("newname").addEventListener("keydown", (event) => { if (event.key === "Enter") $("add").click(); });
+  $("addmany").addEventListener("click", () => {
+    ask({ title: "Add several profiles", text: "How many new profiles? (up to 50)", value: "5", ok: "Add" }).then((value) => {
+      const count = Math.floor(Number(value));
+      if (value !== null && count > 0) noor.invoke("profiles:addMany", Math.min(count, 50)).then(apply);
+    });
+  });
   $("choosechrome").addEventListener("click", () => noor.invoke("chrome:choose").then(apply));
   $("source").addEventListener("click", (event) => { event.preventDefault(); noor.invoke("open:link", event.currentTarget.href); });
   document.addEventListener("click", () => { for (const menu of document.querySelectorAll(".menu.open")) menu.classList.remove("open"); });
