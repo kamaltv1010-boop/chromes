@@ -4,15 +4,15 @@
 // ClientRects once they are turned on), the same on a site at every visit,
 // in its frames, in the windows it opens and in another tab, other values on
 // another site, the switches and the sites turned off, and nothing a page
-// could tell the protection by. Needs Playwright (npm install -g
-// playwright) and a display: on Linux,
+// could tell the protection by. Needs the dev dependencies (npm ci, for
+// playwright-core) and a display: on Linux,
 //   xvfb-run -a node tools/smoke-extension.js
 const fs = require("fs");
 const http = require("http");
 const os = require("os");
 const path = require("path");
 const zlib = require("zlib");
-const { chromium } = require("playwright");
+const { chromium } = require("playwright-core");
 const { pack } = require("./build-extension");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -10,7 +10,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const http = require("http");
-const { _electron: electron } = require("playwright");
+const { _electron: electron } = require("playwright-core");
 const root = path.join(__dirname, "..");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
